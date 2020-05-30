@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 A simple platformer game by Ross Watts
 """
