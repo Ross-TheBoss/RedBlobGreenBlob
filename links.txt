@@ -1,0 +1,4 @@
+newtileset_2: https://opengameart.org/content/adventure-tileset-unfinished
+bold_uiassets: https://opengameart.org/content/ui-buttons-5
+bfxr_sounds: https://opengameart.org/content/8-bit-platformer-sfx
+SpaceBackGround: https://opengameart.org/content/space-background-6
