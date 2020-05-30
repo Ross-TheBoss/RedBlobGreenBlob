@@ -227,9 +227,8 @@ class Game():
         self.buttonrect = self.button.get_rect()
 
         self.txtplay = pygame.font.SysFont("Arial",
-                                           int(scale_val(60))).render("Play",
-                                                                        False,
-                                                                        (255,255,255))
+                                           int(scale_val(60))
+                                           ).render("Play",False,(255,255,255))
         self.txtplayrect = self.txtplay.get_rect()
 
     def startloop(self):
