@@ -21,12 +21,12 @@ JUMPSPEED = 9 # 540 pixels / second
 GRAVITY = 20 # 1200 pixels / second / second
 
 # 8-bit Platformer SFX commissioned by Mark McCorkle for OpenGameArt.org ( http://opengameart.org )
-JUMPSOUNDFILE = "jump.ogg"
-SELECTSOUNDFILE = "select.ogg"
+JUMPSOUNDFILE = "./sounds/jump.ogg"
+SELECTSOUNDFILE = "./sounds/select.ogg"
 
-TILEFILES = ["grass.png","grassc.png","grassp.png"]
+TILEFILES = ["./images/grass.png","./images/grassc.png","./images/grassp.png"]
 
-UIBUTTON = "button.png"
+UIBUTTON = "./images/button.png"
 
 
 class World():
@@ -205,7 +205,7 @@ class Game():
         self.screen = pygame.display.get_surface()
         
         # Graphics
-        with open("level1.txt","r") as f:
+        with open("./levels/level1.txt","r") as f:
             level = f.readlines()
 
         self.world = World(level,SIZE // 2,(255,255,255))
