@@ -28,6 +28,9 @@ SELECTSOUNDFILE = "./sounds/select.ogg"
 TILEFILES = ["./images/grass.png","./images/grassc.png","./images/grassp.png"]
 
 UIBUTTON = "./images/button.png"
+UIBUTTONSMALL = "./images/smallbutton.png"
+UISLIDER = "./images/slider.png"
+UIKNOB = "./images/knob.png"
 
 
 class World():
@@ -42,7 +45,7 @@ class World():
 
         self.height = len(level)
         self.width = len(level[0][:-1]) 
-        self.scrollwidth = self.width * self.blockSize
+        self.scrollWidth = self.width * self.blockSize
 
         # Prepare all the tiles in the game.
         
@@ -80,7 +83,7 @@ class World():
                                            self.blockSize,self.blockSize),
                                        })
 
-    def load_image(self,file):
+    def load_image(self,file) -> pygame.Surface:
         return pygame.transform.scale(pygame.image.load(file),
                                       (self.blockSize,self.blockSize),
                                       )
@@ -103,6 +106,14 @@ class World():
         
         return False
 
+    def at_goal(self,player: pygame.Rect) -> bool:
+        """ Return whether the player is at the goal. """
+        if pygame.Rect(self.end[0],self.end[1],
+                       self.blockSize,self.blockSize).contains(player):
+            return True
+        else:
+            return False
+    
     def move(self,dist: int):
         """ Move the world in the x axis by dist pixels. """
         self.relx -= dist
@@ -143,7 +154,7 @@ class Player(pygame.sprite.Sprite):
         self.velocity = 0
 
     @property
-    def y_change(self):
+    def y_change(self) -> float:
         """ Calculate the player's movement. """
         
         return scale_val(GRAVITY * self.time - self.velocity)
@@ -158,7 +169,7 @@ class Player(pygame.sprite.Sprite):
             movement = scale_val(SPEED * self.framedur // 16)
         
         if self.rect.centerx > (WIDTH // 2) + MOVETHRESHOLD and \
-           self.world.scrollwidth - WIDTH > self.world.relx:
+           self.world.scrollWidth - WIDTH > self.world.relx:
             self.world.move(-movement)
         else:
             self.rect.move_ip(movement,0)
@@ -201,12 +212,86 @@ class Player(pygame.sprite.Sprite):
 
 class Game():
     def __init__(self):
+        """ Control the UI of the game. """
         # The current function to run every update.
         self.update = self.startloop
         self.screen = pygame.display.get_surface()
         
         # Graphics
-        with open("./levels/level1.txt","r") as f:
+        self.level = 1
+        self.load_level("./levels/level{}.txt".format(self.level))
+
+        self.mousepos = None
+
+        # Sounds
+        self.jumpSound = pygame.mixer.Sound(JUMPSOUNDFILE)
+        self.selectSound = pygame.mixer.Sound(SELECTSOUNDFILE)
+
+        # UI images
+
+        # Button
+        self.button = self.load_image(UIBUTTON).convert_alpha()
+        self.buttonrect = self.button.get_rect()
+
+        # Small Button
+        self.smallButton = self.load_image(UIBUTTONSMALL).convert_alpha()
+        self.smallButtonrect = self.smallButton.get_rect()
+
+        # Slider
+        self.slider = self.load_image(UISLIDER,0.7).convert_alpha()
+        self.slidervalue = 0.9
+        self.sliderrect = self.slider.get_rect()
+
+        # Knob
+        self.knob = self.load_image(UIKNOB,0.7).convert_alpha()
+        self.knobrect = self.knob.get_rect()
+        self.knobrect.move_ip(self.slidervalue * self.sliderrect.width,0)
+        
+        # UI text
+
+        # Labels
+        self.labelFont = pygame.font.SysFont("Arial",int(scale_val(40)))
+
+        self.txtsound = self.labelFont.render("Sound: ",True,(255,255,255))
+        self.txtsoundrect = self.txtsound.get_rect()
+
+        # Buttons
+        self.buttfont = pygame.font.SysFont("Arial",int(scale_val(60)))
+        
+        self.txtplay = self.buttfont.render("Play",True,(255,255,255))
+        self.txtplayrect = self.txtplay.get_rect()
+
+        self.txtopt = self.buttfont.render("Options",True,(255,255,255))
+        self.txtoptrect = self.txtopt.get_rect()
+
+        self.txtback = self.buttfont.render("Back",True,(255,255,255))
+        self.txtbackrect = self.txtback.get_rect()
+
+        # Titles
+        self.txttitle = pygame.font.SysFont("Arial",
+                                           int(scale_val(200)),
+                                           bold=True
+                                            ).render("Retro Parkourer",True,
+                                                    (51,255,0))
+        self.txttitlerect = self.txttitle.get_rect()
+
+        self.txtopttitle = pygame.font.SysFont("Arial",
+                                           int(scale_val(100)),
+                                           bold=True
+                                            ).render("Options",True,
+                                                     (255,255,255))
+        self.txtopttitlerect = self.txtopttitle.get_rect()
+        
+
+    def load_image(self,filename,scale=1) -> pygame.Surface:
+        """ Return the image scaled to the correct dimensions. """
+        img = pygame.image.load(filename)
+        return pygame.transform.scale(img,
+                                      (int(scale_val(img.get_width()) * scale),
+                                       int(scale_val(img.get_height()) * scale)))
+
+    def load_level(self,file):
+        with open(file,"r") as f:
             level = f.readlines()
 
         self.world = World(level,SIZE // 2,(255,255,255))
@@ -216,40 +301,78 @@ class Game():
                              self.world)
         self.playerPlain = pygame.sprite.RenderPlain(self.player)
 
-        self.jumpSound = pygame.mixer.Sound(JUMPSOUNDFILE)
-        self.selectSound = pygame.mixer.Sound(SELECTSOUNDFILE)
-
-        self.button = pygame.image.load(UIBUTTON)
-        self.button = pygame.transform.scale(self.button,
-                                             (int(scale_val(self.button.get_width())),
-                                              int(scale_val(self.button.get_height())))
-                                             ).convert_alpha()
-        self.buttonrect = self.button.get_rect()
-
-        self.txtplay = pygame.font.SysFont("Arial",
-                                           int(scale_val(60))
-                                           ).render("Play",False,(255,255,255))
-        self.txtplayrect = self.txtplay.get_rect()
-
     def startloop(self):
+        """ Draw the start screen and handle events. """
         # Clear the screen
         self.screen.fill((0,0,0))
 
-        playbutton = self.screen.blit(self.button,
+        # Title
+        self.screen.blit(self.txttitle,
+                         (WIDTH // 2 - self.txttitlerect.centerx,
+                          HEIGHT // 6 - self.txttitlerect.centery))
+
+        # Buttons
+        playButton = self.screen.blit(self.button,
                                       (WIDTH // 2 - self.buttonrect.centerx,
                                        HEIGHT // 2 - self.buttonrect.centery))
-        
-        if pygame.mouse.get_pressed()[0] and \
-           playbutton.collidepoint(pygame.mouse.get_pos()):
-            self.player.startTime = pygame.time.get_ticks()
-            self.selectSound.play()
-            self.update = self.levelloop
-            
-        
         self.screen.blit(self.txtplay,(WIDTH // 2 - self.txtplayrect.centerx,
                                        HEIGHT // 2 - self.txtplayrect.centery))
 
+        optbutton = self.screen.blit(self.button,
+                                      (WIDTH // 2 - self.buttonrect.centerx,
+                                       HEIGHT // 1.5 - self.buttonrect.centery))
+        self.screen.blit(self.txtopt,(WIDTH // 2 - self.txtoptrect.centerx,
+                                       HEIGHT // 1.5 - self.txtoptrect.centery))
+        
+        if pygame.mouse.get_pressed()[0]:
+            if playButton.collidepoint(pygame.mouse.get_pos()):
+                self.player.startTime = pygame.time.get_ticks()
+                self.selectSound.play()
+                self.update = self.levelloop
+            elif optbutton.collidepoint(pygame.mouse.get_pos()):
+                self.selectSound.play()
+                self.update = self.optionsloop
+
+    def optionsloop(self):
+        """ Draw the options screen and handle events. """
+        # Clear the screen
+        self.screen.fill((0,0,0))
+
+        self.screen.blit(self.txtopttitle,
+                         (WIDTH // 2 - self.txtopttitlerect.centerx,
+                          HEIGHT // 15 - self.txtopttitlerect.centery))
+
+        backButton = self.screen.blit(self.smallButton,(WIDTH // 100,HEIGHT // 100))
+        self.screen.blit(self.txtback,(WIDTH // 70 + self.txtbackrect.centerx,
+                                       HEIGHT // 200 + self.txtbackrect.centery))
+
+        slider = self.screen.blit(self.slider,(WIDTH // 2 - self.sliderrect.centerx,
+                                               HEIGHT // 5 - self.sliderrect.centery))
+        self.screen.blit(self.txtsound,(WIDTH // 2.2 - self.txtsoundrect.centerx - self.sliderrect.centerx,
+                                        HEIGHT // 5 - self.txtsoundrect.centery))
+        soundKnob = self.screen.blit(self.knob,(WIDTH // 2 - self.sliderrect.centerx + self.knobrect.x,
+                                                HEIGHT // 5 - self.knobrect.centery))
+        
+        if pygame.mouse.get_pressed()[0]:
+             if backButton.collidepoint(pygame.mouse.get_pos()):
+                 self.selectSound.play()
+                 self.update = self.startloop
+             elif soundKnob.collidepoint(pygame.mouse.get_pos()):
+                 if self.mousepos:
+                     dx = pygame.mouse.get_pos()[0] - self.mousepos[0]
+                     if self.sliderrect.contains(self.knobrect.move(dx,0)):
+                         self.knobrect.move_ip(dx,0)
+                
+                 self.mousepos = pygame.mouse.get_pos()
+                 
+                 self.slidervalue = self.knobrect.x / self.sliderrect.width
+                 self.jumpSound.set_volume(self.slidervalue * 1.121)
+                 self.selectSound.set_volume(self.slidervalue * 1.121)
+        else:
+            self.mousepos = None
+
     def levelloop(self):
+        """ Draw the level and handle events. """
         # Clear the screen
         self.screen.fill((0,0,0))
         
@@ -276,7 +399,17 @@ class Game():
         self.world.update(self.screen)
         self.playerPlain.draw(self.screen)
 
-def scale_val(value):
+        if self.world.at_goal(self.player.rect):
+            
+            self.level += 1
+            if self.level > 2:
+                self.level = 1
+                self.load_level("./levels/level{}.txt".format(self.level))
+                self.update = self.startloop
+            else:
+                self.load_level("./levels/level{}.txt".format(self.level))
+
+def scale_val(value) -> float:
     return value / 100 * SIZE
 
 def main():
@@ -315,8 +448,7 @@ def main():
                     windowed ^= pygame.display.toggle_fullscreen()
 
         game.update()
-        
-        pygame.display.update()      
+        pygame.display.update()
         game.player.framedur = clock.tick(60)
     
     pygame.quit()
