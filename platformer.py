@@ -405,7 +405,7 @@ class Game():
                           scale_val(150) - \
                           self.txt["title"]["Retro Parkourer"].get_rect().centery))
 
-        # Buttons
+        # Play button
         playButton = self.screen.blit(self.button,
                                       (scale_val(800) - self.buttonrect.centerx,
                                        scale_val(450) - self.buttonrect.centery))
@@ -415,6 +415,7 @@ class Game():
                           scale_val(450) - \
                           self.txt["button"]["Play"].get_rect().centery))
 
+        # Options button
         optbutton = self.screen.blit(self.button,
                                       (scale_val(800) - self.buttonrect.centerx,
                                        scale_val(600) - self.buttonrect.centery))
@@ -440,17 +441,20 @@ class Game():
         # Clear the screen
         self.screen.fill((0,0,0))
 
+        # Title
         self.screen.blit(self.txt["subtitle"]["Options"],
                          (scale_val(800) - \
                           self.txt["subtitle"]["Options"].get_rect().centerx,
                           scale_val(60) - \
                           self.txt["subtitle"]["Options"].get_rect().centery))
 
+        # Back button
         backButton = self.screen.blit(self.smallButton,(scale_val(16),scale_val(9)))
         self.screen.blit(self.txt["button"]["Back"],
                          (scale_val(22) + self.txt["button"]["Back"].get_rect().centerx,
                           scale_val(4) + self.txt["button"]["Back"].get_rect().centery))
-
+        
+        # Sound slider
         slider = self.screen.blit(self.slider,(scale_val(800) - self.sliderrect.centerx,
                                                scale_val(180) - self.sliderrect.centery))
         self.screen.blit(self.txt["label"]["Sound: "],
@@ -532,12 +536,14 @@ class Game():
         self.world.update(self.screen)
         self.playerPlain.draw(self.screen)
 
+        # Title
         self.screen.blit(self.txt["subtitle"]["Pause"],
                          (scale_val(800) - \
                           self.txt["subtitle"]["Pause"].get_rect().centerx,
                           scale_val(60) - \
                           self.txt["subtitle"]["Pause"].get_rect().centery))
 
+        # Play button
         playButton = self.screen.blit(self.button,
                                       (scale_val(800) - self.buttonrect.centerx,
                                        scale_val(225) - self.buttonrect.centery))
@@ -547,6 +553,7 @@ class Game():
                           scale_val(225) - \
                           self.txt["button"]["Play"].get_rect().centery))
 
+        # Options button
         optbutton = self.screen.blit(self.button,
                                       (scale_val(800) - self.buttonrect.centerx,
                                        scale_val(375) - self.buttonrect.centery))
@@ -556,6 +563,7 @@ class Game():
                           scale_val(375) - \
                           self.txt["button"]["Options"].get_rect().centery))
 
+        # Exit button
         exitbutton = self.screen.blit(self.button,
                                       (scale_val(800) - self.buttonrect.centerx,
                                        scale_val(525) - self.buttonrect.centery))
