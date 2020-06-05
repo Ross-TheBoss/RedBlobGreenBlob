@@ -9,6 +9,7 @@ import os
 from pygame.constants import *
 
 # 16:9 aspect ratio
+# Native resolution of 100
 SIZE = 100 # Monitor = 105
 WIDTH = 16 * SIZE
 HEIGHT = 9 * SIZE
@@ -27,7 +28,9 @@ SELECTSOUNDFILE = "./sounds/select.ogg"
 POWERUPSOUNDFILE = "./sounds/powerup.ogg"
 
 TILEFILES = ["./images/grass.png","./images/grassc.png","./images/grassp.png",
-             "./images/dirt.png"]
+             "./images/dirt.png",
+             "./images/metal.png","./images/metalc.png","./images/metalp.png",
+             "./images/metala.png","./images/plate.png"]
 
 UIBUTTON = "./images/button.png"
 UIBUTTONSMALL = "./images/smallbutton.png"
@@ -75,6 +78,22 @@ class World():
         self.tiles[8] += [pygame.transform.rotate(self.tiles[8][6],-90)]
         # 1 Dirt tile (9)
         self.tiles += [[self.load_image(TILEFILES[3])]]
+        # 8 Metal tile variations (10)
+        self.tiles += [[self.load_image(TILEFILES[4])]]
+        self.tiles[10] += [pygame.transform.rotate(self.tiles[10][0],-90),
+                          pygame.transform.rotate(self.tiles[10][0],-180),
+                          pygame.transform.rotate(self.tiles[10][0],-270)]
+
+        self.tiles[10] += [self.load_image(TILEFILES[5])]
+        self.tiles[10] += [pygame.transform.rotate(self.tiles[10][4],-90)]
+        self.tiles[10] += [self.load_image(TILEFILES[6])]
+        self.tiles[10] += [pygame.transform.rotate(self.tiles[10][6],-90)]
+        # 1 Metal tile (11)
+        self.tiles += [[self.load_image(TILEFILES[7])]]
+        # 1 Plate tile (12)
+        self.tiles += [[self.load_image(TILEFILES[8])]]
+
+        
 
         self.tiles = list(map(lambda t: list(map(lambda i:i.convert_alpha(),t)),
                               self.tiles))
@@ -297,6 +316,8 @@ class Game():
         """ Control the UI of the game. """
         # The current function to run every update.
         self.update = self.startloop
+        # The previous function that was run each update.
+        self.previous = self.startloop
         self.screen = pygame.display.get_surface()
         
         # Graphics
@@ -337,7 +358,7 @@ class Game():
                              "Sound: ":None},
                     "button":{"font":pygame.font.SysFont("Arial",int(scale_val(60))),
                               "colour":WHITE,"anti-alias":True,
-                              "Play":None,"Options":None,"Back":None},
+                              "Play":None,"Options":None,"Back":None,"Exit":None},
                     "title":{"font":pygame.font.SysFont("Arial",int(scale_val(200)),
                                                         bold=True),
                              "colour":(51,255,0),"anti-alias":True,
@@ -379,28 +400,28 @@ class Game():
 
         # Title
         self.screen.blit(self.txt["title"]["Retro Parkourer"],
-                         (WIDTH // 2 - \
+                         (scale_val(800) - \
                           self.txt["title"]["Retro Parkourer"].get_rect().centerx,
-                          HEIGHT // 6 - \
+                          scale_val(150) - \
                           self.txt["title"]["Retro Parkourer"].get_rect().centery))
 
         # Buttons
         playButton = self.screen.blit(self.button,
-                                      (WIDTH // 2 - self.buttonrect.centerx,
-                                       HEIGHT // 2 - self.buttonrect.centery))
+                                      (scale_val(800) - self.buttonrect.centerx,
+                                       scale_val(450) - self.buttonrect.centery))
         self.screen.blit(self.txt["button"]["Play"],
-                         (WIDTH // 2 - \
+                         (scale_val(800) - \
                           self.txt["button"]["Play"].get_rect().centerx,
-                          HEIGHT // 2 - \
+                          scale_val(450) - \
                           self.txt["button"]["Play"].get_rect().centery))
 
         optbutton = self.screen.blit(self.button,
-                                      (WIDTH // 2 - self.buttonrect.centerx,
-                                       HEIGHT // 1.5 - self.buttonrect.centery))
+                                      (scale_val(800) - self.buttonrect.centerx,
+                                       scale_val(600) - self.buttonrect.centery))
         self.screen.blit(self.txt["button"]["Options"],
-                         (WIDTH // 2 - \
+                         (scale_val(800) - \
                           self.txt["button"]["Options"].get_rect().centerx,
-                          HEIGHT // 1.5 - \
+                          scale_val(600) - \
                           self.txt["button"]["Options"].get_rect().centery))
         
         if pygame.mouse.get_pressed()[0]:
@@ -408,39 +429,42 @@ class Game():
                 self.player.startTime = pygame.time.get_ticks()
                 self.selectSound.play()
                 self.update = self.levelloop
+                self.previous = self.startloop
             elif optbutton.collidepoint(pygame.mouse.get_pos()):
                 self.selectSound.play()
                 self.update = self.optionsloop
-
+                self.previous = self.startloop
+    
     def optionsloop(self):
         """ Draw the options screen and handle events. """
         # Clear the screen
         self.screen.fill((0,0,0))
 
         self.screen.blit(self.txt["subtitle"]["Options"],
-                         (WIDTH // 2 - \
+                         (scale_val(800) - \
                           self.txt["subtitle"]["Options"].get_rect().centerx,
-                          HEIGHT // 15 - \
+                          scale_val(60) - \
                           self.txt["subtitle"]["Options"].get_rect().centery))
 
-        backButton = self.screen.blit(self.smallButton,(WIDTH // 100,HEIGHT // 100))
+        backButton = self.screen.blit(self.smallButton,(scale_val(16),scale_val(9)))
         self.screen.blit(self.txt["button"]["Back"],
-                         (WIDTH // 70 + self.txt["button"]["Back"].get_rect().centerx,
-                          HEIGHT // 200 + self.txt["button"]["Back"].get_rect().centery))
+                         (scale_val(22) + self.txt["button"]["Back"].get_rect().centerx,
+                          scale_val(4) + self.txt["button"]["Back"].get_rect().centery))
 
-        slider = self.screen.blit(self.slider,(WIDTH // 2 - self.sliderrect.centerx,
-                                               HEIGHT // 5 - self.sliderrect.centery))
+        slider = self.screen.blit(self.slider,(scale_val(800) - self.sliderrect.centerx,
+                                               scale_val(180) - self.sliderrect.centery))
         self.screen.blit(self.txt["label"]["Sound: "],
-                         (WIDTH // 2.2 - \
+                         (scale_val(727) - \
                           self.txt["label"]["Sound: "].get_rect().centerx - self.sliderrect.centerx,
-                          HEIGHT // 5 - self.txt["label"]["Sound: "].get_rect().centery))
-        soundKnob = self.screen.blit(self.knob,(WIDTH // 2 - self.sliderrect.centerx + self.knobrect.x,
-                                                HEIGHT // 5 - self.knobrect.centery))
+                          scale_val(180) - self.txt["label"]["Sound: "].get_rect().centery))
+        soundKnob = self.screen.blit(self.knob,(scale_val(800) - self.sliderrect.centerx + self.knobrect.x,
+                                                scale_val(180) - self.knobrect.centery))
         
         if pygame.mouse.get_pressed()[0]:
              if backButton.collidepoint(pygame.mouse.get_pos()):
                  self.selectSound.play()
-                 self.update = self.startloop
+                 self.update = self.previous
+                 self.previous = self.optionsloop
              elif soundKnob.collidepoint(pygame.mouse.get_pos()):
                  if self.mousepos:
                      dx = pygame.mouse.get_pos()[0] - self.mousepos[0]
@@ -497,6 +521,7 @@ class Game():
             if event.type == KEYDOWN:
                 if event.key == K_p:
                     self.update = self.pauseloop
+                    self.previous = self.levelloop
 
     def pauseloop(self):
         """ Draw the pausescreen and handle events. """
@@ -508,31 +533,72 @@ class Game():
         self.playerPlain.draw(self.screen)
 
         self.screen.blit(self.txt["subtitle"]["Pause"],
-                         (WIDTH // 2 - \
+                         (scale_val(800) - \
                           self.txt["subtitle"]["Pause"].get_rect().centerx,
-                          HEIGHT // 15 - \
+                          scale_val(60) - \
                           self.txt["subtitle"]["Pause"].get_rect().centery))
 
         playButton = self.screen.blit(self.button,
-                                      (WIDTH // 2 - self.buttonrect.centerx,
-                                       HEIGHT // 2 - self.buttonrect.centery))
+                                      (scale_val(800) - self.buttonrect.centerx,
+                                       scale_val(225) - self.buttonrect.centery))
         self.screen.blit(self.txt["button"]["Play"],
-                         (WIDTH // 2 - \
+                         (scale_val(800) - \
                           self.txt["button"]["Play"].get_rect().centerx,
-                          HEIGHT // 2 - \
+                          scale_val(225) - \
                           self.txt["button"]["Play"].get_rect().centery))
 
+        optbutton = self.screen.blit(self.button,
+                                      (scale_val(800) - self.buttonrect.centerx,
+                                       scale_val(375) - self.buttonrect.centery))
+        self.screen.blit(self.txt["button"]["Options"],
+                         (scale_val(800) - \
+                          self.txt["button"]["Options"].get_rect().centerx,
+                          scale_val(375) - \
+                          self.txt["button"]["Options"].get_rect().centery))
+
+        exitbutton = self.screen.blit(self.button,
+                                      (scale_val(800) - self.buttonrect.centerx,
+                                       scale_val(525) - self.buttonrect.centery))
+
+        self.screen.blit(self.txt["button"]["Exit"],
+                         (scale_val(800) - \
+                          self.txt["button"]["Exit"].get_rect().centerx,
+                          scale_val(525) - \
+                          self.txt["button"]["Exit"].get_rect().centery))
+
+        
         self.player.startTime = pygame.time.get_ticks() - \
                                 (self.player.time * (62.5*self.player.framedur))
+
+        if pygame.mouse.get_pressed()[0]:
+            if playButton.collidepoint(pygame.mouse.get_pos()):
+                self.selectSound.play()
+                
+                self.update = self.levelloop
+                self.previous = self.pauseloop
+            elif optbutton.collidepoint(pygame.mouse.get_pos()):
+                self.selectSound.play()
+                
+                self.update = self.optionsloop
+                self.previous = self.pauseloop
+            elif exitbutton.collidepoint(pygame.mouse.get_pos()):
+                self.selectSound.play()
+                
+                self.level = 1
+                self.load_level("./levels/level{}.txt".format(self.level))
+                
+                self.update = self.startloop
+                self.previous = self.pauseloop
 
         # Check for keys
         for event in pygame.event.get():
             if event.type == KEYDOWN:
                 if event.key == K_p:
                     self.update = self.levelloop
+                    self.previous = self.pauseloop
 
-def scale_val(value) -> float:
-    return value / 100 * SIZE
+def scale_val(value) -> int:
+    return int(value / 100 * SIZE)
 
 def main():
     # Sounds
