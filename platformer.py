@@ -4,7 +4,7 @@ A simple platformer game by Ross Watts
 """
 
 import pygame
-import time
+import os
 
 from pygame.constants import *
 
@@ -24,66 +24,138 @@ GRAVITY = 20 # 1200 pixels / second / second
 # 8-bit Platformer SFX commissioned by Mark McCorkle for OpenGameArt.org ( http://opengameart.org )
 JUMPSOUNDFILE = "./sounds/jump.ogg"
 SELECTSOUNDFILE = "./sounds/select.ogg"
+POWERUPSOUNDFILE = "./sounds/powerup.ogg"
 
-TILEFILES = ["./images/grass.png","./images/grassc.png","./images/grassp.png"]
+TILEFILES = ["./images/grass.png","./images/grassc.png","./images/grassp.png",
+             "./images/dirt.png"]
 
 UIBUTTON = "./images/button.png"
 UIBUTTONSMALL = "./images/smallbutton.png"
 UISLIDER = "./images/slider.png"
 UIKNOB = "./images/knob.png"
 
+# Colours
+
+WHITE = (255,255,255)
+GREEN = (255,0,0)
+
 
 class World():
-    def __init__(self,level: list,blockSize: int,colour: tuple):
+    def __init__(self,level: str,blockSize: int,colour: tuple):
         """ Load the level (a list of lines of text) onto the screen. """
         self.items = []
         self.colour = colour
         self.blockSize = blockSize
-        self.start = (0,0)
-        self.end = (0,0)
         self.relx = 0
+        self.rely = 0
 
-        self.height = len(level)
-        self.width = len(level[0][:-1]) 
+        self.width = level.index("\n")
+        self.height = len(level) // self.width
         self.scrollWidth = self.width * self.blockSize
+        self.scrollHeight = self.height * self.blockSize
 
         # Prepare all the tiles in the game.
-        
-        self.tiles = [pygame.surface.Surface([self.blockSize,self.blockSize]),
-                      pygame.surface.Surface([self.blockSize,self.blockSize])]
-        self.tiles[0].fill((0,255,0))
-        self.tiles[1].fill((0,255,0))
-        self.tiles += [pygame.surface.Surface([self.blockSize,self.blockSize])] * 6
-        
-        self.tiles += [self.load_image(TILEFILES[0])]
-        self.tiles += [pygame.transform.rotate(self.tiles[8],-90),
-                       pygame.transform.rotate(self.tiles[8],-180),
-                       pygame.transform.rotate(self.tiles[8],-270)]
 
-        self.tiles += [self.load_image(TILEFILES[1])]
-        self.tiles += [pygame.transform.rotate(self.tiles[12],-90),
-                       self.load_image(TILEFILES[2])]
-        self.tiles += [pygame.transform.rotate(self.tiles[14],-90)]
+        # Start and End (0,1)
+        self.tiles = [[pygame.surface.Surface([self.blockSize,self.blockSize])],
+                      [pygame.surface.Surface([self.blockSize,self.blockSize])]]
+        self.tiles[0][0].fill((0,255,0))
+        self.tiles[1][0].fill((0,255,0))
+        # 6 Placeholders (2,3,4,5,6,7)
+        self.tiles += [[pygame.surface.Surface([self.blockSize,self.blockSize])]] * 6
+        # 8 Grass tile variations (8)
+        self.tiles += [[self.load_image(TILEFILES[0])]]
+        self.tiles[8] += [pygame.transform.rotate(self.tiles[8][0],-90),
+                          pygame.transform.rotate(self.tiles[8][0],-180),
+                          pygame.transform.rotate(self.tiles[8][0],-270)]
 
-        self.tiles = list(map(lambda t: t.convert_alpha(),self.tiles))
+        self.tiles[8] += [self.load_image(TILEFILES[1])]
+        self.tiles[8] += [pygame.transform.rotate(self.tiles[8][4],-90)]
+        self.tiles[8] += [self.load_image(TILEFILES[2])]
+        self.tiles[8] += [pygame.transform.rotate(self.tiles[8][6],-90)]
+        # 1 Dirt tile (9)
+        self.tiles += [[self.load_image(TILEFILES[3])]]
+
+        self.tiles = list(map(lambda t: list(map(lambda i:i.convert_alpha(),t)),
+                              self.tiles))
         
-        
-        for y,line in enumerate(level):
-            for x,block in enumerate(line):
-                if block == "(": # Start
-                    self.start = (x*self.blockSize,y*(self.blockSize-1))
-                elif block == ")": # End
-                    self.end = (x*self.blockSize,y*self.blockSize)
+        tiles0 = self.parse_tile(level,"0")
+            
+
+        # Non-directionals
+        for i,block in enumerate(level):
+            x = i % (self.width + 1)
+            y = i // (self.width + 1)
+
+            if not block in [" ","\n"]:
+                direction = ord(tiles0[i]) - 48 if block == "0" else 0
+                self.items.append({"type":ord(block) - 32,
+                                   "dir":direction,
+                                   "collision":self.has_collisions(level,i),
+                                   "rect":pygame.Rect(
+                                       x*self.blockSize,
+                                       y*self.blockSize,
+                                       self.blockSize,self.blockSize),
+                                   })
+
+        if self.scrollHeight > HEIGHT:
+            self.move_y(-(self.scrollHeight-HEIGHT))
+            self.rely = 0
+    @property
+    def start(self):
+        """ The start tile of the level."""
+        return next(filter(lambda i: i["type"] == 8,self.items))["rect"]
+
+    @property
+    def end(self):
+        """ The end tile of the level."""
+        return next(filter(lambda i: i["type"] == 9,self.items))["rect"]
+
+    def has_collisions(self,level,i):
+        """ Return whether a tile should be able to be collided with. """
+        above = level[i - (self.width + 1)] if i - (self.width + 1) > 0 else "\x00"
+        left = level[i - 1] if i - 1 > 0 else "\x00"
+        below = level[i + (self.width + 1)] if i + (self.width + 1) < len(level) else "\x00"
+        right = level[i + 1] if i + 1 < len(level) else "\x00"
+
+        if ord(level[i]) - 32 < 0x10:
+            return False
+        elif any(map(lambda x: x in ["\x00"," ","(",")"],[above,left,below,right])):
+            return True
+        else:
+            return False
+
+    def parse_tile(self,level,tile):
+        """ Return the orientation of directional tiles. """
+        leveltiles = "".join(map(lambda x: x if x == tile else " ",level))
+
+        for i,block in enumerate(leveltiles):
+            if block != " ":
+                above = leveltiles[i - (self.width + 1)] if i - (self.width + 1) > 0 else "\x00"
+                left = leveltiles[i - 1] if i - 1 > 0 else "\x00"
+                below = leveltiles[i + (self.width + 1)] if i + (self.width + 1) < len(leveltiles) else "\x00"
+                right = leveltiles[i + 1] if i + 1 < len(leveltiles) else "\x00"
                 
-                if not block in [" ","\n"]:
-                    self.items.append({"type":ord(block) - 32,
-                                       "rect":pygame.Rect(
-                                           x*self.blockSize,
-                                           y*self.blockSize,
-                                           self.blockSize,self.blockSize),
-                                       })
+                if below == "0" and right == "0":
+                    leveltiles = leveltiles[:i] + "4" + leveltiles[i + 1:]
+                elif below == "0" and left == "0":
+                    leveltiles = leveltiles[:i] + "5" + leveltiles[i + 1:]
+                elif above == "4" or above == "3":
+                    if left in list(map(str,range(8))):
+                        leveltiles = leveltiles[:i] + "6" + leveltiles[i + 1:]
+                    else:
+                        leveltiles = leveltiles[:i] + "3" + leveltiles[i + 1:]
+                elif above == "5" or above == "1":
+                    if right in list(map(str,range(8))):
+                        leveltiles = leveltiles[:i] + "7" + leveltiles[i + 1:]
+                    else:
+                        leveltiles = leveltiles[:i] + "1" + leveltiles[i + 1:]
+
+        return leveltiles
+        
 
     def load_image(self,file) -> pygame.Surface:
+        """ Return a correctly scaled image. """
         return pygame.transform.scale(pygame.image.load(file),
                                       (self.blockSize,self.blockSize),
                                       )
@@ -91,7 +163,7 @@ class World():
     def collided(self, player: pygame.Rect):
         """ Return the rectangle the player rectangle is colliding with. """
         blocks = list(map(lambda i: i["rect"],
-                          filter(lambda b: b["type"] in range(0x10,0x20),
+                          filter(lambda b: b["collision"],
                                  self.items)))
         index = player.collidelist(blocks)
         if index != -1:
@@ -105,27 +177,26 @@ class World():
             return barriers[index]
         
         return False
-
-    def at_goal(self,player: pygame.Rect) -> bool:
-        """ Return whether the player is at the goal. """
-        if pygame.Rect(self.end[0],self.end[1],
-                       self.blockSize,self.blockSize).contains(player):
-            return True
-        else:
-            return False
     
-    def move(self,dist: int):
+    def move_x(self,dist: int):
         """ Move the world in the x axis by dist pixels. """
-        self.relx -= dist
+        self.relx -= int(dist)
         for block in self.items:
             block["rect"].move_ip(dist,0)
+
+    def move_y(self,dist: int):
+        """ Move the world in the y axis by dist pixels. """
+        self.rely -= int(dist)
+        for block in self.items:
+            block["rect"].move_ip(0,dist)
+    
 
     def valid_rect(self,block,types=range(0x8,0x20)):
         """Check if a block is a certain type and return the infomation for blitting. """
         if pygame.Rect(-SIZE,-SIZE,WIDTH+SIZE+MOVETHRESHOLD,
                        HEIGHT+SIZE+MOVETHRESHOLD).contains(block["rect"]) and \
            block["type"] in types:
-            return (self.tiles[block["type"] - 0x8],block["rect"].topleft)
+            return (self.tiles[block["type"] - 0x8][block["dir"]],block["rect"].topleft)
         else:
             return False    
 
@@ -170,7 +241,7 @@ class Player(pygame.sprite.Sprite):
         
         if self.rect.centerx > (WIDTH // 2) + MOVETHRESHOLD and \
            self.world.scrollWidth - WIDTH > self.world.relx:
-            self.world.move(-movement)
+            self.world.move_x(-movement)
         else:
             self.rect.move_ip(movement,0)
                 
@@ -185,7 +256,7 @@ class Player(pygame.sprite.Sprite):
         
         if self.rect.centerx < (WIDTH // 2) - MOVETHRESHOLD and \
            self.world.relx > 0:
-            self.world.move(movement)
+            self.world.move_x(movement)
         else:
             self.rect.move_ip(-movement,0)
 
@@ -204,11 +275,22 @@ class Player(pygame.sprite.Sprite):
         
         # Calculate if a block will be hit.
         collision = self.world.collided(self.rect.move(0,self.y_change))
-        if not collision:
-            self.rect.move_ip(0,self.y_change)
-        else:
+        if collision:
             self.startTime = pygame.time.get_ticks()
-            self.rect.move_ip(0,collision.top - self.rect.bottom)
+            movement = collision.top - self.rect.bottom
+        else:
+            movement = self.y_change
+
+        if self.rect.centery < (HEIGHT // 2) - MOVETHRESHOLD and \
+           self.world.scrollHeight - HEIGHT > self.world.rely and \
+           movement < 0:
+            self.world.move_y(-movement)
+        elif self.rect.centery > (HEIGHT // 2) + MOVETHRESHOLD and \
+             self.world.rely < 0 and \
+             movement > 0:
+            self.world.move_y(-movement)
+        else:
+            self.rect.move_ip(0,movement)
 
 class Game():
     def __init__(self):
@@ -226,6 +308,7 @@ class Game():
         # Sounds
         self.jumpSound = pygame.mixer.Sound(JUMPSOUNDFILE)
         self.selectSound = pygame.mixer.Sound(SELECTSOUNDFILE)
+        self.powerupSound = pygame.mixer.Sound(POWERUPSOUNDFILE)
 
         # UI images
 
@@ -249,39 +332,27 @@ class Game():
         
         # UI text
 
-        # Labels
-        self.labelFont = pygame.font.SysFont("Arial",int(scale_val(40)))
+        self.txt = {"label":{"font":pygame.font.SysFont("Arial",int(scale_val(40))),
+                             "colour":WHITE,"anti-alias":True,
+                             "Sound: ":None},
+                    "button":{"font":pygame.font.SysFont("Arial",int(scale_val(60))),
+                              "colour":WHITE,"anti-alias":True,
+                              "Play":None,"Options":None,"Back":None},
+                    "title":{"font":pygame.font.SysFont("Arial",int(scale_val(200)),
+                                                        bold=True),
+                             "colour":(51,255,0),"anti-alias":True,
+                             "Retro Parkourer":None},
+                    "subtitle":{"font":pygame.font.SysFont("Arial",int(scale_val(100)),
+                                                           bold=True),
+                                "colour":WHITE,"anti-alias":True,
+                                "Options":None,"Pause":None}}
 
-        self.txtsound = self.labelFont.render("Sound: ",True,(255,255,255))
-        self.txtsoundrect = self.txtsound.get_rect()
-
-        # Buttons
-        self.buttfont = pygame.font.SysFont("Arial",int(scale_val(60)))
-        
-        self.txtplay = self.buttfont.render("Play",True,(255,255,255))
-        self.txtplayrect = self.txtplay.get_rect()
-
-        self.txtopt = self.buttfont.render("Options",True,(255,255,255))
-        self.txtoptrect = self.txtopt.get_rect()
-
-        self.txtback = self.buttfont.render("Back",True,(255,255,255))
-        self.txtbackrect = self.txtback.get_rect()
-
-        # Titles
-        self.txttitle = pygame.font.SysFont("Arial",
-                                           int(scale_val(200)),
-                                           bold=True
-                                            ).render("Retro Parkourer",True,
-                                                    (51,255,0))
-        self.txttitlerect = self.txttitle.get_rect()
-
-        self.txtopttitle = pygame.font.SysFont("Arial",
-                                           int(scale_val(100)),
-                                           bold=True
-                                            ).render("Options",True,
-                                                     (255,255,255))
-        self.txtopttitlerect = self.txtopttitle.get_rect()
-        
+        for key in self.txt:
+            for msg in self.txt[key]:
+                if self.txt[key][msg] == None:
+                    self.txt[key][msg] = self.txt[key]["font"].render(msg,
+                                                                      self.txt[key]["anti-alias"],
+                                                                      self.txt[key]["colour"])
 
     def load_image(self,filename,scale=1) -> pygame.Surface:
         """ Return the image scaled to the correct dimensions. """
@@ -292,11 +363,11 @@ class Game():
 
     def load_level(self,file):
         with open(file,"r") as f:
-            level = f.readlines()
+            level = f.read()
 
-        self.world = World(level,SIZE // 2,(255,255,255))
-        self.player = Player(pygame.Rect(self.world.start[0],
-                                         self.world.start[1]+SIZE // 3,
+        self.world = World(level,SIZE // 2,WHITE)
+        self.player = Player(pygame.Rect(self.world.start.x,
+                                         self.world.start.y+SIZE // 3,
                                          SIZE // 3,SIZE // 3),
                              self.world)
         self.playerPlain = pygame.sprite.RenderPlain(self.player)
@@ -307,22 +378,30 @@ class Game():
         self.screen.fill((0,0,0))
 
         # Title
-        self.screen.blit(self.txttitle,
-                         (WIDTH // 2 - self.txttitlerect.centerx,
-                          HEIGHT // 6 - self.txttitlerect.centery))
+        self.screen.blit(self.txt["title"]["Retro Parkourer"],
+                         (WIDTH // 2 - \
+                          self.txt["title"]["Retro Parkourer"].get_rect().centerx,
+                          HEIGHT // 6 - \
+                          self.txt["title"]["Retro Parkourer"].get_rect().centery))
 
         # Buttons
         playButton = self.screen.blit(self.button,
                                       (WIDTH // 2 - self.buttonrect.centerx,
                                        HEIGHT // 2 - self.buttonrect.centery))
-        self.screen.blit(self.txtplay,(WIDTH // 2 - self.txtplayrect.centerx,
-                                       HEIGHT // 2 - self.txtplayrect.centery))
+        self.screen.blit(self.txt["button"]["Play"],
+                         (WIDTH // 2 - \
+                          self.txt["button"]["Play"].get_rect().centerx,
+                          HEIGHT // 2 - \
+                          self.txt["button"]["Play"].get_rect().centery))
 
         optbutton = self.screen.blit(self.button,
                                       (WIDTH // 2 - self.buttonrect.centerx,
                                        HEIGHT // 1.5 - self.buttonrect.centery))
-        self.screen.blit(self.txtopt,(WIDTH // 2 - self.txtoptrect.centerx,
-                                       HEIGHT // 1.5 - self.txtoptrect.centery))
+        self.screen.blit(self.txt["button"]["Options"],
+                         (WIDTH // 2 - \
+                          self.txt["button"]["Options"].get_rect().centerx,
+                          HEIGHT // 1.5 - \
+                          self.txt["button"]["Options"].get_rect().centery))
         
         if pygame.mouse.get_pressed()[0]:
             if playButton.collidepoint(pygame.mouse.get_pos()):
@@ -338,18 +417,23 @@ class Game():
         # Clear the screen
         self.screen.fill((0,0,0))
 
-        self.screen.blit(self.txtopttitle,
-                         (WIDTH // 2 - self.txtopttitlerect.centerx,
-                          HEIGHT // 15 - self.txtopttitlerect.centery))
+        self.screen.blit(self.txt["subtitle"]["Options"],
+                         (WIDTH // 2 - \
+                          self.txt["subtitle"]["Options"].get_rect().centerx,
+                          HEIGHT // 15 - \
+                          self.txt["subtitle"]["Options"].get_rect().centery))
 
         backButton = self.screen.blit(self.smallButton,(WIDTH // 100,HEIGHT // 100))
-        self.screen.blit(self.txtback,(WIDTH // 70 + self.txtbackrect.centerx,
-                                       HEIGHT // 200 + self.txtbackrect.centery))
+        self.screen.blit(self.txt["button"]["Back"],
+                         (WIDTH // 70 + self.txt["button"]["Back"].get_rect().centerx,
+                          HEIGHT // 200 + self.txt["button"]["Back"].get_rect().centery))
 
         slider = self.screen.blit(self.slider,(WIDTH // 2 - self.sliderrect.centerx,
                                                HEIGHT // 5 - self.sliderrect.centery))
-        self.screen.blit(self.txtsound,(WIDTH // 2.2 - self.txtsoundrect.centerx - self.sliderrect.centerx,
-                                        HEIGHT // 5 - self.txtsoundrect.centery))
+        self.screen.blit(self.txt["label"]["Sound: "],
+                         (WIDTH // 2.2 - \
+                          self.txt["label"]["Sound: "].get_rect().centerx - self.sliderrect.centerx,
+                          HEIGHT // 5 - self.txt["label"]["Sound: "].get_rect().centery))
         soundKnob = self.screen.blit(self.knob,(WIDTH // 2 - self.sliderrect.centerx + self.knobrect.x,
                                                 HEIGHT // 5 - self.knobrect.centery))
         
@@ -399,15 +483,53 @@ class Game():
         self.world.update(self.screen)
         self.playerPlain.draw(self.screen)
 
-        if self.world.at_goal(self.player.rect):
-            
+        if self.world.end.contains(self.player.rect):
+            self.powerupSound.play()
             self.level += 1
-            if self.level > 2:
+            if self.level > 3:
                 self.level = 1
                 self.load_level("./levels/level{}.txt".format(self.level))
                 self.update = self.startloop
             else:
                 self.load_level("./levels/level{}.txt".format(self.level))
+
+        for event in pygame.event.get():
+            if event.type == KEYDOWN:
+                if event.key == K_p:
+                    self.update = self.pauseloop
+
+    def pauseloop(self):
+        """ Draw the pausescreen and handle events. """
+        # Clear the screen
+        self.screen.fill((0,0,0))
+
+        # Draw the world and player
+        self.world.update(self.screen)
+        self.playerPlain.draw(self.screen)
+
+        self.screen.blit(self.txt["subtitle"]["Pause"],
+                         (WIDTH // 2 - \
+                          self.txt["subtitle"]["Pause"].get_rect().centerx,
+                          HEIGHT // 15 - \
+                          self.txt["subtitle"]["Pause"].get_rect().centery))
+
+        playButton = self.screen.blit(self.button,
+                                      (WIDTH // 2 - self.buttonrect.centerx,
+                                       HEIGHT // 2 - self.buttonrect.centery))
+        self.screen.blit(self.txt["button"]["Play"],
+                         (WIDTH // 2 - \
+                          self.txt["button"]["Play"].get_rect().centerx,
+                          HEIGHT // 2 - \
+                          self.txt["button"]["Play"].get_rect().centery))
+
+        self.player.startTime = pygame.time.get_ticks() - \
+                                (self.player.time * (62.5*self.player.framedur))
+
+        # Check for keys
+        for event in pygame.event.get():
+            if event.type == KEYDOWN:
+                if event.key == K_p:
+                    self.update = self.levelloop
 
 def scale_val(value) -> float:
     return value / 100 * SIZE
@@ -439,7 +561,7 @@ def main():
         for event in pygame.event.get():
             if event.type == QUIT: 
                 run = False # Close the window
-            elif event.type == pygame.KEYDOWN:
+            elif event.type == KEYDOWN:
                 if event.key == K_q and event.mod & KMOD_CTRL:
                     run = False # Close the window
                 elif event.key == K_F11: # Toggle fullscreen
