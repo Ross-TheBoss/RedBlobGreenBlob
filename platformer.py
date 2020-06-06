@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
-A simple platformer game by Ross Watts
+Retro Parkourer
+
+A simple platformer game by Ross Watts.
 """
 
 import pygame
