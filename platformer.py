@@ -4,6 +4,7 @@ A simple platformer game by Ross Watts
 """
 
 import pygame
+import random
 import os
 
 from pygame.constants import *
@@ -26,6 +27,9 @@ GRAVITY = 20 # 1200 pixels / second / second
 JUMPSOUNDFILE = "./sounds/jump.ogg"
 SELECTSOUNDFILE = "./sounds/select.ogg"
 POWERUPSOUNDFILE = "./sounds/powerup.ogg"
+DESTROYSOUNDFILE = "./sounds/destroy.ogg" # Orginally Explosion.wav
+
+EXPLODEDPLAYER = "./images/exploded.png"
 
 TILEFILES = ["./images/grass.png","./images/grassc.png","./images/grassp.png",
              "./images/dirt.png",
@@ -34,6 +38,7 @@ TILEFILES = ["./images/grass.png","./images/grassc.png","./images/grassp.png",
 
 UIBUTTON = "./images/button.png"
 UIBUTTONSMALL = "./images/smallbutton.png"
+UIBUTTONMINI = "./images/minibutton.png"
 UISLIDER = "./images/slider.png"
 UIKNOB = "./images/knob.png"
 
@@ -189,13 +194,21 @@ class World():
             return blocks[index]
 
         barriers = [pygame.Rect(-SIZE,0,SIZE,HEIGHT),
-                    pygame.Rect(WIDTH,0,SIZE,HEIGHT),
-                    pygame.Rect(0,HEIGHT,WIDTH,SIZE)]
-        index = player.collidelist(barriers)
+                    pygame.Rect(WIDTH,0,SIZE,HEIGHT)]
+        index = player.collidelist(barriers[:2])
         if index != -1:
             return barriers[index]
         
         return False
+
+    def failed(self,player: pygame.Rect):
+        """ Return whether the player collided with a deadly object. """
+        void = pygame.Rect(0,HEIGHT,WIDTH,SIZE)
+        if player.colliderect(void):
+            return True
+        else:
+            return False
+        
     
     def move_x(self,dist: int):
         """ Move the world in the x axis by dist pixels. """
@@ -330,8 +343,16 @@ class Game():
         self.jumpSound = pygame.mixer.Sound(JUMPSOUNDFILE)
         self.selectSound = pygame.mixer.Sound(SELECTSOUNDFILE)
         self.powerupSound = pygame.mixer.Sound(POWERUPSOUNDFILE)
+        self.destroySound = pygame.mixer.Sound(DESTROYSOUNDFILE)
 
-        # UI images
+        # Images
+
+        # Player
+
+        self.expPlayer = self.load_image(EXPLODEDPLAYER,1/1.5)
+        self.expPlayerrect = self.expPlayer.get_rect()
+
+        # UI
 
         # Button
         self.button = self.load_image(UIBUTTON).convert_alpha()
@@ -341,6 +362,10 @@ class Game():
         self.smallButton = self.load_image(UIBUTTONSMALL).convert_alpha()
         self.smallButtonrect = self.smallButton.get_rect()
 
+        # Mini Button
+        self.miniButton = self.load_image(UIBUTTONMINI).convert_alpha()
+        self.miniButtonrect = self.miniButton.get_rect()
+        
         # Slider
         self.slider = self.load_image(UISLIDER,0.7).convert_alpha()
         self.slidervalue = 0.9
@@ -358,7 +383,8 @@ class Game():
                              "Sound: ":None},
                     "button":{"font":pygame.font.SysFont("Arial",int(scale_val(60))),
                               "colour":WHITE,"anti-alias":True,
-                              "Play":None,"Options":None,"Back":None,"Exit":None},
+                              "Play":None,"Options":None,"Back":None,"Exit":None,
+                              "Level Select":None},
                     "title":{"font":pygame.font.SysFont("Arial",int(scale_val(200)),
                                                         bold=True),
                              "colour":(51,255,0),"anti-alias":True,
@@ -366,8 +392,11 @@ class Game():
                     "subtitle":{"font":pygame.font.SysFont("Arial",int(scale_val(100)),
                                                            bold=True),
                                 "colour":WHITE,"anti-alias":True,
-                                "Options":None,"Pause":None}}
-
+                                "Options":None,"Pause":None,"Level Select":None}}
+        
+        for i in range(len(os.listdir("./levels/"))):
+            self.txt["button"][str(i+1)] = None
+        
         for key in self.txt:
             for msg in self.txt[key]:
                 if self.txt[key][msg] == None:
@@ -425,6 +454,16 @@ class Game():
                           scale_val(600) - \
                           self.txt["button"]["Options"].get_rect().centery))
         
+        # Level selection button
+        levelbutton = self.screen.blit(self.button,
+                                      (scale_val(800) - self.buttonrect.centerx,
+                                       scale_val(750) - self.buttonrect.centery))
+        self.screen.blit(self.txt["button"]["Level Select"],
+                         (scale_val(800) - \
+                          self.txt["button"]["Level Select"].get_rect().centerx,
+                          scale_val(750) - \
+                          self.txt["button"]["Level Select"].get_rect().centery))
+        
         if pygame.mouse.get_pressed()[0]:
             if playButton.collidepoint(pygame.mouse.get_pos()):
                 self.player.startTime = pygame.time.get_ticks()
@@ -434,6 +473,10 @@ class Game():
             elif optbutton.collidepoint(pygame.mouse.get_pos()):
                 self.selectSound.play()
                 self.update = self.optionsloop
+                self.previous = self.startloop
+            elif levelbutton.collidepoint(pygame.mouse.get_pos()):
+                self.selectSound.play()
+                self.update = self.levelselectloop
                 self.previous = self.startloop
     
     def optionsloop(self):
@@ -514,7 +557,7 @@ class Game():
         if self.world.end.contains(self.player.rect):
             self.powerupSound.play()
             self.level += 1
-            if self.level > 3:
+            if self.level > len(os.listdir("./levels/")):
                 self.level = 1
                 self.load_level("./levels/level{}.txt".format(self.level))
                 self.update = self.startloop
@@ -526,6 +569,63 @@ class Game():
                 if event.key == K_p:
                     self.update = self.pauseloop
                     self.previous = self.levelloop
+
+        if self.world.failed(self.player.rect):
+            self.destroySound.play()
+
+            self.screen.fill((0,0,0),self.player.rect)
+            self.screen.blit(pygame.transform.rotate(self.expPlayer,random.randint(0,359)),
+                             (self.player.rect.x - self.expPlayerrect.centerx,
+                              self.player.rect.y - self.expPlayerrect.centery))
+            pygame.display.update()
+            pygame.time.delay(100)
+            self.load_level("./levels/level{}.txt".format(self.level))
+
+    def levelselectloop(self):
+        """ Draw the level selection screen and handle events. """
+        # Clear the screen
+        self.screen.fill((0,0,0))
+
+        # Title
+        self.screen.blit(self.txt["subtitle"]["Level Select"],
+                         (scale_val(800) - \
+                          self.txt["subtitle"]["Level Select"].get_rect().centerx,
+                          scale_val(60) - \
+                          self.txt["subtitle"]["Level Select"].get_rect().centery))
+
+        # Back button
+        backButton = self.screen.blit(self.smallButton,(scale_val(16),scale_val(9)))
+        self.screen.blit(self.txt["button"]["Back"],
+                         (scale_val(22) + self.txt["button"]["Back"].get_rect().centerx,
+                          scale_val(4) + self.txt["button"]["Back"].get_rect().centery))
+        
+        gen = zip(*iter((x,y) for y in range(0,750,150) for x in range(0,900,150)))
+        
+        for x,y,lvl in zip(*gen,range(1,len(os.listdir("./levels/"))+1)):
+            lvlButton = self.screen.blit(self.miniButton,(scale_val(350 + x),scale_val(158 + y)))
+            self.screen.blit(self.txt["button"][str(lvl)],
+                     (scale_val(378 + x) + self.txt["button"][str(lvl)].get_rect().centerx,
+                      scale_val(154 + y) + self.txt["button"][str(lvl)].get_rect().centery))
+
+            if pygame.mouse.get_pressed()[0] and \
+               lvlButton.collidepoint(pygame.mouse.get_pos()):
+                self.selectSound.play()
+                
+                self.level = lvl
+                self.load_level("./levels/level{}.txt".format(self.level))
+                
+                self.update = self.levelloop
+                self.previous = self.optionsloop
+
+
+        if pygame.mouse.get_pressed()[0]:
+             if backButton.collidepoint(pygame.mouse.get_pos()):
+                 self.selectSound.play()
+                 
+                 self.update = self.previous
+                 self.previous = self.optionsloop
+                 
+        
 
     def pauseloop(self):
         """ Draw the pausescreen and handle events. """
