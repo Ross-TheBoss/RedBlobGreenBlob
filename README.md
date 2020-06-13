@@ -2,8 +2,9 @@
 A 2D platformer game.
 
 Features:
-- 3 levels
-- Grass, Dirt, Metal and Metal Plate tiles.
+- 1 level
+- 1 minute of gameplay
+- Grass, Dirt, Metal, Metal Plate, Stone and Lava tiles.
 
 # Credits / Attribution
 
