@@ -25,24 +25,45 @@ JUMPSPEED = 9 # 540 pixels / second
 
 GRAVITY = 20 # 1200 pixels / second / second
 
+# Directories
+
+SOUNDDIR = "sounds"
+IMGDIR = "images"
+
 # 8-bit Platformer SFX commissioned by Mark McCorkle for OpenGameArt.org ( http://opengameart.org )
-JUMPSOUNDFILE = "./sounds/jump.ogg"
-SELECTSOUNDFILE = "./sounds/select.ogg"
-POWERUPSOUNDFILE = "./sounds/powerup.ogg"
-DESTROYSOUNDFILE = "./sounds/destroy.ogg" # Orginally Explosion.wav
+JUMPSOUNDFILE = os.path.join(SOUNDDIR,"jump.ogg")
+SELECTSOUNDFILE = os.path.join(SOUNDDIR,"select.ogg")
+POWERUPSOUNDFILE = os.path.join(SOUNDDIR,"powerup.ogg")
+DESTROYSOUNDFILE = os.path.join(SOUNDDIR,"destroy.ogg") # Orginally Explosion.wav
 
-EXPLODEDPLAYER = "./images/exploded.png"
+EXPLODEDPLAYER = os.path.join(IMGDIR,"exploded.png")
 
-TILEFILES = ["./images/grass.png","./images/grassc.png","./images/grassp.png",
-             "./images/dirt.png",
-             "./images/metal.png","./images/metalc.png","./images/metalp.png",
-             "./images/metala.png","./images/plate.png"]
+PLATETILE = 0
+TOPTILE = 1
+ANITILE = 2
+VARTILE = 3
 
-UIBUTTON = "./images/button.png"
-UIBUTTONSMALL = "./images/smallbutton.png"
-UIBUTTONMINI = "./images/minibutton.png"
-UISLIDER = "./images/slider.png"
-UIKNOB = "./images/knob.png"
+TILECOLLIDE = 0b1
+TILEDEADLY = 0b10
+TILEALPHA = 0b100
+
+TILES = [{"type":TOPTILE,"flags":TILECOLLIDE,"files":["grass.png","grassc.png","grassp.png"]},
+         {"type":PLATETILE,"flags":TILECOLLIDE,"files":["dirt.png"]},
+         {"type":TOPTILE,"flags":TILECOLLIDE,"files":["metal.png","metalc.png","metalp.png"]},
+         {"type":PLATETILE,"flags":TILECOLLIDE,"files":["metala.png"]},
+         {"type":PLATETILE,"flags":TILECOLLIDE,"files":["plate.png"]},
+         {"type":ANITILE,"flags":TILEDEADLY | TILEALPHA,
+          "files":["lava.png","lava1.png","lava2.png","lava3.png","lava4.png"]},
+         {"type":VARTILE,"flags":TILECOLLIDE,"files":["stone.png","stone1.png","stone2.png"]}]
+
+for tile in TILES:
+    tile.update({"files":list(map(lambda name: os.path.join(IMGDIR,name),tile["files"]))})
+
+UIBUTTON = os.path.join(IMGDIR,"button.png")
+UIBUTTONSMALL = os.path.join(IMGDIR,"smallbutton.png")
+UIBUTTONMINI = os.path.join(IMGDIR,"minibutton.png")
+UISLIDER = os.path.join(IMGDIR,"slider.png")
+UIKNOB = os.path.join(IMGDIR,"knob.png")
 
 # Colours
 
@@ -74,38 +95,27 @@ class World():
         # 6 Placeholders (2,3,4,5,6,7)
         self.tiles += [[pygame.surface.Surface([self.blockSize,self.blockSize])]] * 6
         # 8 Grass tile variations (8)
-        self.tiles += [[self.load_image(TILEFILES[0])]]
-        self.tiles[8] += [pygame.transform.rotate(self.tiles[8][0],-90),
-                          pygame.transform.rotate(self.tiles[8][0],-180),
-                          pygame.transform.rotate(self.tiles[8][0],-270)]
-
-        self.tiles[8] += [self.load_image(TILEFILES[1])]
-        self.tiles[8] += [pygame.transform.rotate(self.tiles[8][4],-90)]
-        self.tiles[8] += [self.load_image(TILEFILES[2])]
-        self.tiles[8] += [pygame.transform.rotate(self.tiles[8][6],-90)]
+        self.tiles += [self.load_tile(TILES[0])]
         # 1 Dirt tile (9)
-        self.tiles += [[self.load_image(TILEFILES[3])]]
+        self.tiles += [self.load_tile(TILES[1])]
         # 8 Metal tile variations (10)
-        self.tiles += [[self.load_image(TILEFILES[4])]]
-        self.tiles[10] += [pygame.transform.rotate(self.tiles[10][0],-90),
-                          pygame.transform.rotate(self.tiles[10][0],-180),
-                          pygame.transform.rotate(self.tiles[10][0],-270)]
-
-        self.tiles[10] += [self.load_image(TILEFILES[5])]
-        self.tiles[10] += [pygame.transform.rotate(self.tiles[10][4],-90)]
-        self.tiles[10] += [self.load_image(TILEFILES[6])]
-        self.tiles[10] += [pygame.transform.rotate(self.tiles[10][6],-90)]
+        self.tiles += [self.load_tile(TILES[2])]
         # 1 Metal tile (11)
-        self.tiles += [[self.load_image(TILEFILES[7])]]
+        self.tiles += [self.load_tile(TILES[3])]
         # 1 Plate tile (12)
-        self.tiles += [[self.load_image(TILEFILES[8])]]
+        self.tiles += [self.load_tile(TILES[4])]
+        # 3 Lava tiles (13)
+        self.tiles += [self.load_tile(TILES[5])]
+        # 1 Stone tiles (14)
+        self.tiles += [self.load_tile(TILES[6])]
 
-        
+        # Orientations of directional tiles
+        dirtiles = list(map(lambda x: self.parse_tile(level,chr(x[0] + 48)) if x[1]["type"] == TOPTILE else None,
+                            enumerate(TILES)))
 
-        self.tiles = list(map(lambda t: list(map(lambda i:i.convert_alpha(),t)),
-                              self.tiles))
-        
-        tiles0 = self.parse_tile(level,"0")
+        # Tiles that won't be collided with. (air, background decor, etc. )
+        bgtiles = list(filter(None,map(lambda x: False if x[1]["flags"] & TILECOLLIDE else chr(x[0] + 48),
+                                       enumerate(TILES))))
             
 
         # Non-directionals
@@ -114,15 +124,22 @@ class World():
             y = i // (self.width + 1)
 
             if not block in [" ","\n"]:
-                direction = ord(tiles0[i]) - 48 if block == "0" else 0
+                if ord(block) - 48 >= 0 and TILES[ord(block) - 48]["type"] == TOPTILE:
+                    direction = int(dirtiles[ord(block) - 48][i])
+                else:
+                    direction = 0
+                
                 self.items.append({"type":ord(block) - 32,
                                    "dir":direction,
-                                   "collision":self.has_collisions(level,i),
+                                   "collision":self.has_collisions(bgtiles,level,i),
                                    "rect":pygame.Rect(
                                        x*self.blockSize,
                                        y*self.blockSize,
                                        self.blockSize,self.blockSize),
                                    })
+
+        self.animate(VARTILE)
+        self.animate()
 
         if self.scrollHeight > HEIGHT:
             self.move_y(-(self.scrollHeight-HEIGHT))
@@ -137,23 +154,50 @@ class World():
         """ The end tile of the level."""
         return next(filter(lambda i: i["type"] == 9,self.items))["rect"]
 
-    def has_collisions(self,level,i):
+    def has_collisions(self,bgtiles,level,i):
         """ Return whether a tile should be able to be collided with. """
+        
         above = level[i - (self.width + 1)] if i - (self.width + 1) > 0 else "\x00"
         left = level[i - 1] if i - 1 > 0 else "\x00"
         below = level[i + (self.width + 1)] if i + (self.width + 1) < len(level) else "\x00"
         right = level[i + 1] if i + 1 < len(level) else "\x00"
 
-        if ord(level[i]) - 32 < 0x10:
+        if ord(level[i]) - 32 < 0x10 or \
+           not (TILES[max(0,ord(level[i]) - 48)]["flags"] & TILECOLLIDE):
             return False
-        elif any(map(lambda x: x in ["\x00"," ","(",")"],[above,left,below,right])):
+        elif any(map(lambda x: x in ["\x00"," ","(",")"] + bgtiles,
+                     [above,left,below,right])):
             return True
         else:
             return False
 
+    def load_tile(self,tile):
+        """ Return a all of a tile variations. """
+        
+        if tile["type"] == PLATETILE:
+            imgs = [self.load_image(tile["files"][0])]
+        elif tile["type"] == TOPTILE:
+            imgs = [self.load_image(tile["files"][0])]
+            imgs += [pygame.transform.rotate(imgs[0],-90),
+                     pygame.transform.rotate(imgs[0],-180),
+                     pygame.transform.rotate(imgs[0],-270)]
+            imgs += [self.load_image(tile["files"][1])]
+            imgs += [pygame.transform.rotate(imgs[4],-90)]
+            imgs += [self.load_image(tile["files"][2])]
+            imgs += [pygame.transform.rotate(imgs[6],-90)]
+        elif tile["type"] == ANITILE or tile["type"] == VARTILE:
+            imgs = list(map(self.load_image,tile["files"]))
+
+        if tile["flags"] & TILEALPHA:
+            imgs = list(map(lambda i:i.convert_alpha(),imgs))
+        else:
+            imgs = list(map(lambda i:i.convert(),imgs))
+
+        return imgs
+
     def parse_tile(self,level,tile):
         """ Return the orientation of directional tiles. """
-        leveltiles = "".join(map(lambda x: x if x == tile else " ",level))
+        leveltiles = "".join(map(lambda x: "0" if x == tile else " ",level))
 
         for i,block in enumerate(leveltiles):
             if block != " ":
@@ -206,7 +250,12 @@ class World():
     def failed(self,player: pygame.Rect):
         """ Return whether the player collided with a deadly object. """
         void = pygame.Rect(0,HEIGHT,WIDTH,SIZE)
-        if player.colliderect(void):
+        blocks = list(map(lambda i: i["rect"],
+                          filter(lambda b: b["type"] - 16 >= 0 and \
+                                 TILES[b["type"] - 16]["flags"] & TILEDEADLY,
+                                 self.items)))
+        
+        if player.collidelist([void] + blocks) != -1:
             return True
         else:
             return False
@@ -230,12 +279,21 @@ class World():
         if pygame.Rect(-SIZE,-SIZE,WIDTH+SIZE+MOVETHRESHOLD,
                        HEIGHT+SIZE+MOVETHRESHOLD).contains(block["rect"]) and \
            block["type"] in types:
-            return (self.tiles[block["type"] - 0x8][block["dir"]],block["rect"].topleft)
+            return (self.tiles[block["type"] - 0x8][block["dir"]],
+                    block["rect"].topleft)
         else:
-            return False    
+            return False
 
+    def animate(self,_type=ANITILE):
+        """ Animate the tiles. """
+        
+        for i,v in enumerate(self.items):
+            if TILES[max(v["type"] - 0x10,0)]["type"] == _type:
+                self.items[i]["dir"] = random.randint(0,len(TILES[v["type"] - 0x10]["files"])-1)
+        
     def update(self,screen: pygame.Surface):
         """ Draw the world onto the screen. """
+        
         screen.blits(list(filter(None,map(self.valid_rect,self.items))))
 
 class Player(pygame.sprite.Sprite):
@@ -262,16 +320,16 @@ class Player(pygame.sprite.Sprite):
     def y_change(self) -> float:
         """ Calculate the player's movement. """
         
-        return scale_val(GRAVITY * self.time - self.velocity)
+        return scale_val((GRAVITY * self.time - self.velocity) * self.framedur / 16)
 
     def right(self):
         """ Move the player right. """
         
-        collision = self.world.collided(self.rect.move(scale_val(SPEED * self.framedur // 16),0))
+        collision = self.world.collided(self.rect.move(scale_val(SPEED * self.framedur / 16),0))
         if collision:
             movement = collision.left - self.rect.right
         else:
-            movement = scale_val(SPEED * self.framedur // 16)
+            movement = scale_val(SPEED * self.framedur / 16)
         
         if self.rect.centerx > (WIDTH // 2) + MOVETHRESHOLD and \
            self.world.scrollWidth - WIDTH > self.world.relx:
@@ -282,11 +340,11 @@ class Player(pygame.sprite.Sprite):
     def left(self):
         """ Move the player left. """
         
-        collision = self.world.collided(self.rect.move(scale_val(-SPEED * self.framedur // 16),0))
+        collision = self.world.collided(self.rect.move(scale_val(-SPEED * self.framedur / 16),0))
         if collision:
             movement = self.rect.left - collision.right
         else:
-            movement = scale_val(SPEED * self.framedur // 16)
+            movement = scale_val(SPEED * self.framedur / 16)
         
         if self.rect.centerx < (WIDTH // 2) - MOVETHRESHOLD and \
            self.world.relx > 0:
@@ -305,7 +363,7 @@ class Player(pygame.sprite.Sprite):
                 self.velocity = 0
                 self.startTime = pygame.time.get_ticks()
 
-        self.time = (pygame.time.get_ticks() - self.startTime) / (62.5 * self.framedur)
+        self.time = (pygame.time.get_ticks() - self.startTime)  / (1000)
         
         # Calculate if a block will be hit.
         collision = self.world.collided(self.rect.move(0,self.y_change))
@@ -340,6 +398,8 @@ class Game():
         self.load_level("./levels/level{}.txt".format(self.level))
 
         self.mousepos = None
+
+        self.failclock = 0
 
         # Sounds
         self.jumpSound = pygame.mixer.Sound(JUMPSOUNDFILE)
@@ -542,19 +602,36 @@ class Game():
             self.player.right()
 
         if key_state[K_UP] and \
-           self.world.collided(self.player.rect.move(0,GRAVITY)) and \
+           self.world.collided(self.player.rect.move(0,scale_val(GRAVITY))) and \
            self.player.velocity == 0:
 
             self.player.startTime = pygame.time.get_ticks()
             self.player.velocity = JUMPSPEED
 
             self.jumpSound.play()
+            
 
-        self.player.gravity()
+        # Draw the player and world
+        if self.world.failed(self.player.rect):
+            self.screen.blit(pygame.transform.rotate(self.expPlayer,random.randint(0,359)),
+                             (self.player.rect.x - self.expPlayerrect.centerx + \
+                              scale_val(random.randint(0,10)),
+                              self.player.rect.y - self.expPlayerrect.centery + \
+                              scale_val(random.randint(0,10))))
+            self.world.update(self.screen)
+             
+            self.failclock += 1
+            self.player.startTime = pygame.time.get_ticks()
+            self.player.velocity = 0
+        elif self.failclock == 0:
+            self.world.update(self.screen)
+        
+            self.player.gravity()
+            
+            self.playerPlain.draw(self.screen)
 
-        # Draw the world and player
-        self.world.update(self.screen)
-        self.playerPlain.draw(self.screen)
+        if pygame.time.get_ticks() % 300 < self.player.framedur:
+            self.world.animate()
 
         if self.world.end.contains(self.player.rect):
             self.powerupSound.play()
@@ -572,14 +649,10 @@ class Game():
                     self.update = self.pauseloop
                     self.previous = self.levelloop
 
-        if self.world.failed(self.player.rect):
+        if self.failclock == 1:
             self.destroySound.play()
-
-            self.screen.fill((0,0,0),self.player.rect)
-            self.screen.blit(pygame.transform.rotate(self.expPlayer,random.randint(0,359)),
-                             (self.player.rect.x - self.expPlayerrect.centerx,
-                              self.player.rect.y - self.expPlayerrect.centery))
-            pygame.display.update()
+        elif self.failclock == 5:
+            self.failclock = 0
             pygame.time.delay(100)
             self.load_level("./levels/level{}.txt".format(self.level))
 
@@ -706,9 +779,10 @@ class Game():
                 if event.key == K_p:
                     self.update = self.levelloop
                     self.previous = self.pauseloop
+    
 
 def scale_val(value) -> int:
-    return int(value / 100 * SIZE)
+    return round(value / 100 * SIZE)
 
 def main():
     # Sounds
@@ -719,7 +793,7 @@ def main():
     pygame.init()
     
     pygame.display.set_caption("Platformer")
-    pygame.display.set_mode((WIDTH,HEIGHT),DOUBLEBUF)
+    pygame.display.set_mode((WIDTH,HEIGHT),DOUBLEBUF | RESIZABLE | HWSURFACE)
 
     # Fonts
     pygame.font.init()
@@ -748,6 +822,8 @@ def main():
         game.update()
         pygame.display.update()
         game.player.framedur = clock.tick(60)
+        fps = clock.get_fps()
+    ## print(fps)
     
     pygame.quit()
 
