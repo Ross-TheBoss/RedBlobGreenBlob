@@ -77,8 +77,14 @@ class World():
         self.items = []
         self.colour = colour
         self.blockSize = blockSize
+
+        # Relative x and y coordinates.
         self.relx = 0
         self.rely = 0
+
+        # Checkpoint scrolling x and y coordinates.
+        self.checkx = 0
+        self.checky = 0
 
         self.width = level.index("\n")
         self.height = len(level) // self.width
@@ -87,13 +93,15 @@ class World():
 
         # Prepare all the tiles in the game.
 
-        # Start and End (0,1)
+        # Start, End and Checkpoint (0,1,2)
         self.tiles = [[pygame.surface.Surface([self.blockSize,self.blockSize])],
+                      [pygame.surface.Surface([self.blockSize,self.blockSize])],
                       [pygame.surface.Surface([self.blockSize,self.blockSize])]]
         self.tiles[0][0].fill((0,255,0))
         self.tiles[1][0].fill((0,255,0))
-        # 6 Placeholders (2,3,4,5,6,7)
-        self.tiles += [[pygame.surface.Surface([self.blockSize,self.blockSize])]] * 6
+        self.tiles[2][0].fill((0,200,0))
+        # 5 Placeholders (2,3,4,5,6,7)
+        self.tiles += [[pygame.surface.Surface([self.blockSize,self.blockSize])]] * 5
         # 8 Grass tile variations (8)
         self.tiles += [self.load_tile(TILES[0])]
         # 1 Dirt tile (9)
@@ -141,9 +149,22 @@ class World():
         self.animate(VARTILE)
         self.animate()
 
+        # The checkpoint
+        self.check = self.start
+
+        if self.start.x > (WIDTH // 2 + MOVETHRESHOLD):
+            self.move_x(-(self.start.x - (WIDTH // 2 + MOVETHRESHOLD)))
+            self.checkx = self.relx
+
+        if self.scrollHeight - self.start.y > (HEIGHT // 2 + MOVETHRESHOLD):
+            self.move_y((self.scrollHeight - self.start.y)-\
+                        (HEIGHT // 2 + MOVETHRESHOLD))
+            self.checky = self.rely
+        
         if self.scrollHeight > HEIGHT:
             self.move_y(-(self.scrollHeight-HEIGHT))
-            self.rely = 0
+            self.rely = self.rely - (self.scrollHeight-HEIGHT)
+            
     @property
     def start(self):
         """ The start tile of the level."""
@@ -165,7 +186,7 @@ class World():
         if ord(level[i]) - 32 < 0x10 or \
            not (TILES[max(0,ord(level[i]) - 48)]["flags"] & TILECOLLIDE):
             return False
-        elif any(map(lambda x: x in ["\x00"," ","(",")"] + bgtiles,
+        elif any(map(lambda x: x in ["\x00"," ","(",")","*"] + bgtiles,
                      [above,left,below,right])):
             return True
         else:
@@ -206,9 +227,9 @@ class World():
                 below = leveltiles[i + (self.width + 1)] if i + (self.width + 1) < len(leveltiles) else "\x00"
                 right = leveltiles[i + 1] if i + 1 < len(leveltiles) else "\x00"
                 
-                if below == "0" and right == "0":
+                if below == "0" and right in ["0","6"]:
                     leveltiles = leveltiles[:i] + "4" + leveltiles[i + 1:]
-                elif below == "0" and left == "0":
+                elif below == "0" and left in ["0","7"]:
                     leveltiles = leveltiles[:i] + "5" + leveltiles[i + 1:]
                 elif above == "4" or above == "3":
                     if left in list(map(str,range(8))):
@@ -259,7 +280,21 @@ class World():
             return True
         else:
             return False
-        
+
+    def at_checkpoint(self,player: pygame.Rect):
+        blocks = list(map(lambda i: i["rect"],
+                          filter(lambda b: b["type"] == 10,
+                                 self.items)))
+
+        i = player.collidelist(blocks)
+        if i != -1 and self.check != blocks[i]:
+            self.checkx = self.relx
+            self.checky = self.rely
+
+            self.check = blocks[i]
+            return True
+        else:
+            return False
     
     def move_x(self,dist: int):
         """ Move the world in the x axis by dist pixels. """
@@ -272,8 +307,8 @@ class World():
         self.rely -= int(dist)
         for block in self.items:
             block["rect"].move_ip(0,dist)
-    
 
+        
     def valid_rect(self,block,types=range(0x8,0x20)):
         """Check if a block is a certain type and return the infomation for blitting. """
         if pygame.Rect(-SIZE,-SIZE,WIDTH+SIZE+MOVETHRESHOLD,
@@ -482,6 +517,7 @@ class Game():
                                          self.world.start.y+SIZE // 3,
                                          SIZE // 3,SIZE // 3),
                              self.world)
+
         self.playerPlain = pygame.sprite.RenderPlain(self.player)
 
     def startloop(self):
@@ -630,6 +666,9 @@ class Game():
             
             self.playerPlain.draw(self.screen)
 
+        if self.world.at_checkpoint(self.player.rect):
+            self.powerupSound.play()
+
         if pygame.time.get_ticks() % 300 < self.player.framedur:
             self.world.animate()
 
@@ -654,7 +693,17 @@ class Game():
         elif self.failclock == 5:
             self.failclock = 0
             pygame.time.delay(100)
-            self.load_level("./levels/level{}.txt".format(self.level))
+
+            # Reset the world scrolling
+            self.world.move_x(self.world.relx-self.world.checkx)
+            self.world.move_y(self.world.rely-self.world.checky)
+            
+            # Reset the player
+            self.player = Player(pygame.Rect(self.world.check.x,
+                                             self.world.check.y+SIZE // 3,
+                                             SIZE // 3,SIZE // 3),
+                                 self.world)
+            self.playerPlain = pygame.sprite.RenderPlain(self.player)
 
     def levelselectloop(self):
         """ Draw the level selection screen and handle events. """
