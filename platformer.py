@@ -20,10 +20,13 @@ MOVETHRESHOLD = int(SIZE)
 
 # Units pixels per 1/60 seconds
 
+# Velocity
 SPEED = 7 # 420 pixels / second
 JUMPSPEED = 9 # 540 pixels / second
 
+# Acceleration
 GRAVITY = 20 # 1200 pixels / second / second
+AIRRES = 10 # 120 pixels / second / second
 
 # Directories
 
@@ -245,14 +248,29 @@ class World():
         return leveltiles
         
 
-    def load_image(self,file) -> pygame.Surface:
+    def load_image(self, file) -> pygame.Surface:
         """ Return a correctly scaled image. """
         return pygame.transform.scale(pygame.image.load(file),
                                       (self.blockSize,self.blockSize),
                                       )
 
+    def get_movement(self, player: pygame.Rect, movement: int):
+        """ Return how far the rect can be moved (in the x-axis) before colliding or reaching max. """
+        
+        collision = self.collided(player.move(movement,0))
+        if collision:
+            if movement > 0:
+                # Moving right
+                movement = collision.left - player.right
+            else:
+                # Moving left
+                movement =  collision.right - player.left
+
+        return movement
+        
     def collided(self, player: pygame.Rect):
         """ Return the rectangle the player rectangle is colliding with. """
+        
         blocks = list(map(lambda i: i["rect"],
                           filter(lambda b: b["collision"],
                                  self.items)))
@@ -260,13 +278,14 @@ class World():
         if index != -1:
             return blocks[index]
 
-        barriers = [pygame.Rect(-SIZE,0,SIZE,HEIGHT),
-                    pygame.Rect(WIDTH,0,SIZE,HEIGHT)]
+        barriers = [pygame.Rect(-SIZE*100,0,SIZE*100,HEIGHT),
+                    pygame.Rect(WIDTH,0,SIZE*100,HEIGHT)]
         index = player.collidelist(barriers[:2])
         if index != -1:
             return barriers[index]
         
         return False
+        
 
     def failed(self,player: pygame.Rect):
         """ Return whether the player collided with a deadly object. """
@@ -341,30 +360,31 @@ class Player(pygame.sprite.Sprite):
         self.image = pygame.surface.Surface([rect.width,rect.height]).convert()
         self.image.fill((255,0,0))
 
-        # Start time
-        self.startTime = pygame.time.get_ticks()
-        self.time = 1
+        # Ground time (time when the player had ground beneath them.)
+        self.groundTime = pygame.time.get_ticks()
 
         # 60 fps frame duration
         self.framedur = 16
 
-        # Initial velocity
-        self.velocity = 0
+        # Initial velocity for gravity
+        self.gravVel = 0
 
-    @property
-    def y_change(self) -> float:
-        """ Calculate the player's movement. """
-        
-        return scale_val((GRAVITY * self.time - self.velocity) * self.framedur / 16)
+    def get_velocity(self, acceleration: float, time: float, velocity: float) -> int:
+        """
+        Return the velocity given the acceleration, initial velocity and time.
+        Uses the equation - v = a * dt + u 
+        """
 
-    def right(self):
-        """ Move the player right. """
-        
-        collision = self.world.collided(self.rect.move(scale_val(SPEED * self.framedur / 16),0))
-        if collision:
-            movement = collision.left - self.rect.right
-        else:
-            movement = scale_val(SPEED * self.framedur / 16)
+        return scale_val((acceleration * get_interval(time) + velocity) \
+                         * self.framedur / 16)
+
+    def right(self, m):
+        """ Move the player right by the magnetude (m). """
+
+        movement = self.world.get_movement(self.rect,
+                                           scale_val(m * self.framedur / 16))
+
+        # Camera scrolling
         
         if self.rect.centerx > (WIDTH // 2) + MOVETHRESHOLD and \
            self.world.scrollWidth - WIDTH > self.world.relx:
@@ -372,41 +392,60 @@ class Player(pygame.sprite.Sprite):
         else:
             self.rect.move_ip(movement,0)
                 
-    def left(self):
-        """ Move the player left. """
-        
-        collision = self.world.collided(self.rect.move(scale_val(-SPEED * self.framedur / 16),0))
-        if collision:
-            movement = self.rect.left - collision.right
-        else:
-            movement = scale_val(SPEED * self.framedur / 16)
+    def left(self, m):
+        """ Move the player left by the magnetude (m). """
+
+        movement = self.world.get_movement(self.rect,
+                                           scale_val(-m * self.framedur / 16))
+
+        # Camera scrolling
         
         if self.rect.centerx < (WIDTH // 2) - MOVETHRESHOLD and \
            self.world.relx > 0:
-            self.world.move_x(movement)
+            self.world.move_x(-movement)
         else:
-            self.rect.move_ip(-movement,0)
+            self.rect.move_ip(movement,0)
 
+    def move_x(self, m):
+        """ Move the player in the x axis by the magnetude (m) considering collisions. """
+
+        movement = self.world.get_movement(self.rect,
+                                           scale_val(m * self.framedur / 16))
+
+        if m > 0:
+            if self.rect.centerx > (WIDTH // 2) + MOVETHRESHOLD and \
+               self.world.scrollWidth - WIDTH > self.world.relx:
+                self.world.move_x(-movement)
+            else:
+                self.rect.move_ip(movement,0)
+        else:
+             if self.rect.centerx < (WIDTH // 2) - MOVETHRESHOLD and \
+                self.world.relx > 0:
+                 self.world.move_x(-movement)
+             else:
+                self.rect.move_ip(movement,0)
+        
     def gravity(self):
         """ Apply the force of gravity onto the player. """
         
+        dy = self.get_velocity(GRAVITY,self.groundTime,-self.gravVel)
+        
         # Check if the player is moving upwards.
-        if self.velocity > 0:
+        if self.gravVel > 0:
             # Check if the peak point has been reached.
-            collision = self.world.collided(self.rect.move(0,self.y_change))
-            if self.time >= -(JUMPSPEED / -GRAVITY) or collision:
-                self.velocity = 0
-                self.startTime = pygame.time.get_ticks()
-
-        self.time = (pygame.time.get_ticks() - self.startTime)  / (1000)
+            collision = self.world.collided(self.rect.move(0,dy))
+            if get_interval(self.groundTime) >= -(self.gravVel / -GRAVITY) or collision:
+                self.gravVel = 0
+                self.groundTime = pygame.time.get_ticks()
+                dy = 0
         
         # Calculate if a block will be hit.
-        collision = self.world.collided(self.rect.move(0,self.y_change))
+        collision = self.world.collided(self.rect.move(0,dy))
         if collision:
-            self.startTime = pygame.time.get_ticks()
+            self.groundTime = pygame.time.get_ticks()
             movement = collision.top - self.rect.bottom
         else:
-            movement = self.y_change
+            movement = dy
 
         if self.rect.centery < (HEIGHT // 2) - MOVETHRESHOLD and \
            self.world.scrollHeight - HEIGHT > self.world.rely and \
@@ -435,12 +474,15 @@ class Game():
         self.mousepos = None
 
         self.failclock = 0
+        self.pausetime = 0
 
         # Sounds
         self.jumpSound = pygame.mixer.Sound(JUMPSOUNDFILE)
         self.selectSound = pygame.mixer.Sound(SELECTSOUNDFILE)
         self.powerupSound = pygame.mixer.Sound(POWERUPSOUNDFILE)
         self.destroySound = pygame.mixer.Sound(DESTROYSOUNDFILE)
+
+        self.jumpChl = pygame.mixer.Channel(1)
 
         # Images
 
@@ -564,7 +606,7 @@ class Game():
         
         if pygame.mouse.get_pressed()[0]:
             if playButton.collidepoint(pygame.mouse.get_pos()):
-                self.player.startTime = pygame.time.get_ticks()
+                self.player.groundTime = pygame.time.get_ticks()
                 self.selectSound.play()
                 self.update = self.levelloop
                 self.previous = self.startloop
@@ -633,19 +675,20 @@ class Game():
         key_state = pygame.key.get_pressed()
 
         if key_state[K_LEFT]:
-            self.player.left()
+            self.player.left(SPEED)
         elif key_state[K_RIGHT]:
-            self.player.right()
+            self.player.right(SPEED)
 
-        if key_state[K_UP] and \
-           self.world.collided(self.player.rect.move(0,scale_val(GRAVITY))) and \
-           self.player.velocity == 0:
 
-            self.player.startTime = pygame.time.get_ticks()
-            self.player.velocity = JUMPSPEED
+        if key_state[K_UP]:
+            if self.player.gravVel == 0:
+                if self.world.collided(self.player.rect.move(0,1)):
+                    self.player.groundTime = pygame.time.get_ticks()
+                    self.player.gravVel = JUMPSPEED
 
-            self.jumpSound.play()
-            
+                    if not self.jumpChl.get_busy():
+                        self.jumpChl.play(self.jumpSound)
+                
 
         # Draw the player and world
         if self.world.failed(self.player.rect):
@@ -657,8 +700,8 @@ class Game():
             self.world.update(self.screen)
              
             self.failclock += 1
-            self.player.startTime = pygame.time.get_ticks()
-            self.player.velocity = 0
+            self.player.groundTime = pygame.time.get_ticks()
+            self.player.gravVel = 0
         elif self.failclock == 0:
             self.world.update(self.screen)
         
@@ -666,12 +709,15 @@ class Game():
             
             self.playerPlain.draw(self.screen)
 
+        # Play the sound when a checkpoint is reached.
         if self.world.at_checkpoint(self.player.rect):
             self.powerupSound.play()
 
+        # Animate the world.
         if pygame.time.get_ticks() % 300 < self.player.framedur:
             self.world.animate()
 
+        # Advance to the next level.
         if self.world.end.contains(self.player.rect):
             self.powerupSound.play()
             self.level += 1
@@ -685,6 +731,7 @@ class Game():
         for event in pygame.event.get():
             if event.type == KEYDOWN:
                 if event.key == K_p:
+                    self.pausetime = pygame.time.get_ticks()
                     self.update = self.pauseloop
                     self.previous = self.levelloop
 
@@ -798,13 +845,11 @@ class Game():
                           scale_val(525) - \
                           self.txt["button"]["Exit"].get_rect().centery))
 
-        
-        self.player.startTime = pygame.time.get_ticks() - \
-                                (self.player.time * (62.5*self.player.framedur))
-
         if pygame.mouse.get_pressed()[0]:
             if playButton.collidepoint(pygame.mouse.get_pos()):
                 self.selectSound.play()
+
+                self.player.groundTime += 1000 * get_interval(self.pausetime)
                 
                 self.update = self.levelloop
                 self.previous = self.pauseloop
@@ -826,12 +871,18 @@ class Game():
         for event in pygame.event.get():
             if event.type == KEYDOWN:
                 if event.key == K_p:
+                    self.player.groundTime += 1000 * get_interval(self.pausetime)
+                    
                     self.update = self.levelloop
                     self.previous = self.pauseloop
     
 
 def scale_val(value) -> int:
     return round(value / 100 * SIZE)
+
+def get_interval(ticks: int) -> float:
+    """ Get how much time has passed in seconds. """
+    return (pygame.time.get_ticks() - ticks) / 1000
 
 def main():
     # Sounds
