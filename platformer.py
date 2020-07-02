@@ -13,7 +13,7 @@ from pygame.constants import *
 
 # 16:9 aspect ratio
 # Native resolution of 100
-SIZE = 100 # Monitor = 105
+SIZE = 105 # Monitor = 105
 WIDTH = 16 * SIZE
 HEIGHT = 9 * SIZE
 MOVETHRESHOLD = int(SIZE)
@@ -26,7 +26,6 @@ JUMPSPEED = 9 # 540 pixels / second
 
 # Acceleration
 GRAVITY = 20 # 1200 pixels / second / second
-AIRRES = 10 # 120 pixels / second / second
 
 # Directories
 
@@ -67,11 +66,16 @@ UIBUTTONSMALL = os.path.join(IMGDIR,"smallbutton.png")
 UIBUTTONMINI = os.path.join(IMGDIR,"minibutton.png")
 UISLIDER = os.path.join(IMGDIR,"slider.png")
 UIKNOB = os.path.join(IMGDIR,"knob.png")
+UION = os.path.join(IMGDIR,"on.png")
+UIOFF = os.path.join(IMGDIR,"off.png")
+
+BACKGROUND = os.path.join(IMGDIR,"background.png")
 
 # Colours
 
 WHITE = (255,255,255)
 GREEN = (255,0,0)
+        
 
 
 class World():
@@ -356,6 +360,7 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
         self.rect = rect
         self.world = world
+        self.particles = []
 
         self.image = pygame.surface.Surface([rect.width,rect.height]).convert()
         self.image.fill((255,0,0))
@@ -389,8 +394,15 @@ class Player(pygame.sprite.Sprite):
         if self.rect.centerx > (WIDTH // 2) + MOVETHRESHOLD and \
            self.world.scrollWidth - WIDTH > self.world.relx:
             self.world.move_x(-movement)
+            self.particles = list(map(lambda p: p.move(-movement,0),self.particles))
         else:
             self.rect.move_ip(movement,0)
+
+        if self.world.collided(self.rect.move(0,1)) and movement > (SPEED / 2):
+            for i in range(2):
+                size = scale_val(random.randint(7,10))
+                self.particles.append(pygame.Rect(self.rect.centerx+(i*movement)/2,
+                                                  self.rect.bottom,size,size))
                 
     def left(self, m):
         """ Move the player left by the magnetude (m). """
@@ -403,8 +415,17 @@ class Player(pygame.sprite.Sprite):
         if self.rect.centerx < (WIDTH // 2) - MOVETHRESHOLD and \
            self.world.relx > 0:
             self.world.move_x(-movement)
+            self.particles = list(map(lambda p: p.move(-movement,0),self.particles))
         else:
             self.rect.move_ip(movement,0)
+
+        if self.world.collided(self.rect.move(0,1)) and movement < (-SPEED / 2):
+            for i in range(2):
+                size = scale_val(random.randint(7,10))
+                self.particles.append(pygame.Rect(self.rect.centerx+(i*movement)/2,
+                                                  self.rect.bottom,size,size))
+
+       
 
     def move_x(self, m):
         """ Move the player in the x axis by the magnetude (m) considering collisions. """
@@ -434,10 +455,14 @@ class Player(pygame.sprite.Sprite):
         if self.gravVel > 0:
             # Check if the peak point has been reached.
             collision = self.world.collided(self.rect.move(0,dy))
-            if get_interval(self.groundTime) >= -(self.gravVel / -GRAVITY) or collision:
+            if get_interval(self.groundTime) >= -(self.gravVel / -GRAVITY):
                 self.gravVel = 0
                 self.groundTime = pygame.time.get_ticks()
                 dy = 0
+            elif collision:
+                self.gravVel = 0
+                self.groundTime = pygame.time.get_ticks()
+                dy = collision.bottom - self.rect.top
         
         # Calculate if a block will be hit.
         collision = self.world.collided(self.rect.move(0,dy))
@@ -451,12 +476,23 @@ class Player(pygame.sprite.Sprite):
            self.world.scrollHeight - HEIGHT > self.world.rely and \
            movement < 0:
             self.world.move_y(-movement)
+            self.particles = list(map(lambda p: p.move(0,-movement),self.particles))
         elif self.rect.centery > (HEIGHT // 2) + MOVETHRESHOLD and \
              self.world.rely < 0 and \
              movement > 0:
             self.world.move_y(-movement)
+            self.particles = list(map(lambda p: p.move(0,-movement),self.particles))
         else:
             self.rect.move_ip(0,movement)
+
+    def draw_particles(self,screen: pygame.Surface):
+        """ Draw particles under the player. """
+        for i,particle in enumerate(self.particles):
+                if particle.width != 0:
+                    shade = max(0,200 - (len(self.particles)-i)*8)
+                    self.particles[i].width *= 0.95
+                    self.particles[i].height *= 0.95
+                    pygame.draw.rect(screen,(shade,0,0),particle)
 
 class Game():
     def __init__(self):
@@ -470,6 +506,7 @@ class Game():
         # Graphics
         self.level = 1
         self.load_level("./levels/level{}.txt".format(self.level))
+        
 
         self.mousepos = None
 
@@ -491,35 +528,42 @@ class Game():
         self.expPlayer = self.load_image(EXPLODEDPLAYER,1/1.5)
         self.expPlayerrect = self.expPlayer.get_rect()
 
+        # Background
+
+        self.background = self.load_image(BACKGROUND).convert()
+        
         # UI
 
         # Button
-        self.button = self.load_image(UIBUTTON).convert_alpha()
-        self.buttonrect = self.button.get_rect()
+        self.button, self.buttonrect = self.load_ui(UIBUTTON,alpha=True)
 
         # Small Button
-        self.smallButton = self.load_image(UIBUTTONSMALL).convert_alpha()
-        self.smallButtonrect = self.smallButton.get_rect()
+        self.smallButton, self.smallButtonrect = self.load_ui(UIBUTTONSMALL,alpha=True)
 
         # Mini Button
-        self.miniButton = self.load_image(UIBUTTONMINI).convert_alpha()
-        self.miniButtonrect = self.miniButton.get_rect()
+        self.miniButton, self.miniButtonrect = self.load_ui(UIBUTTONMINI,alpha=True)
         
         # Slider
-        self.slider = self.load_image(UISLIDER,0.7).convert_alpha()
+        self.slider, self.sliderrect = self.load_ui(UISLIDER,scale=0.7,alpha=True)
         self.slidervalue = 0.9
-        self.sliderrect = self.slider.get_rect()
+
+        # Switch on
+        self.switchOn, self.switchOnrect = self.load_ui(UION,scale=0.7,alpha=True)
+
+        # Switch off
+        self.switchOff, self.switchOffrect = self.load_ui(UIOFF,scale=0.7,alpha=True)
+        self.timerBool = True
+        self.particleBool = True
 
         # Knob
-        self.knob = self.load_image(UIKNOB,0.7).convert_alpha()
-        self.knobrect = self.knob.get_rect()
+        self.knob, self.knobrect = self.load_ui(UIKNOB,scale=0.7,alpha=True)
         self.knobrect.move_ip(self.slidervalue * self.sliderrect.width,0)
         
         # UI text
 
         self.txt = {"label":{"font":pygame.font.SysFont("Arial",int(scale_val(40))),
                              "colour":WHITE,"anti-alias":True,
-                             "Sound: ":None},
+                             "Sound: ":None,"Timer: ":None,"Particles: ":None},
                     "button":{"font":pygame.font.SysFont("Arial",int(scale_val(60))),
                               "colour":WHITE,"anti-alias":True,
                               "Play":None,"Options":None,"Back":None,"Exit":None,
@@ -543,6 +587,27 @@ class Game():
                                                                       self.txt[key]["anti-alias"],
                                                                       self.txt[key]["colour"])
 
+        # Timer
+        self.timertxt = self.txt["button"]["font"].render("0",
+                                                         self.txt["button"]["anti-alias"],
+                                                         self.txt["button"]["colour"])
+    def blit_centered(self,surface: pygame.Surface,x,y):
+        """ Blit the surface to the screen centered around x and y. """
+        return self.screen.blit(surface,(scale_val(x) - surface.get_rect().centerx,
+                                         scale_val(y) - surface.get_rect().centery))
+        
+    def load_ui(self,filename,scale=1,alpha=False):
+        """ Return the image and assiated rect for the image. """
+        element = self.load_image(filename,scale)
+        if alpha:
+            element = element.convert_alpha()
+        else:
+            element = element.convert()
+        
+        return element, element.get_rect()
+
+        
+
     def load_image(self,filename,scale=1) -> pygame.Surface:
         """ Return the image scaled to the correct dimensions. """
         img = pygame.image.load(filename)
@@ -554,6 +619,7 @@ class Game():
         with open(file,"r") as f:
             level = f.read()
 
+        self.levelclock = pygame.time.get_ticks()
         self.world = World(level,SIZE // 2,WHITE)
         self.player = Player(pygame.Rect(self.world.start.x,
                                          self.world.start.y+SIZE // 3,
@@ -567,46 +633,28 @@ class Game():
         # Clear the screen
         self.screen.fill((0,0,0))
 
+        # Background
+        self.screen.blit(self.background,(0,0))
+
         # Title
-        self.screen.blit(self.txt["title"]["Retro Parkourer"],
-                         (scale_val(800) - \
-                          self.txt["title"]["Retro Parkourer"].get_rect().centerx,
-                          scale_val(150) - \
-                          self.txt["title"]["Retro Parkourer"].get_rect().centery))
+        self.blit_centered(self.txt["title"]["Retro Parkourer"],800,150)
 
         # Play button
-        playButton = self.screen.blit(self.button,
-                                      (scale_val(800) - self.buttonrect.centerx,
-                                       scale_val(450) - self.buttonrect.centery))
-        self.screen.blit(self.txt["button"]["Play"],
-                         (scale_val(800) - \
-                          self.txt["button"]["Play"].get_rect().centerx,
-                          scale_val(450) - \
-                          self.txt["button"]["Play"].get_rect().centery))
+        playButton = self.blit_centered(self.button,800,450)
+        self.blit_centered(self.txt["button"]["Play"],800,450)
 
         # Options button
-        optbutton = self.screen.blit(self.button,
-                                      (scale_val(800) - self.buttonrect.centerx,
-                                       scale_val(600) - self.buttonrect.centery))
-        self.screen.blit(self.txt["button"]["Options"],
-                         (scale_val(800) - \
-                          self.txt["button"]["Options"].get_rect().centerx,
-                          scale_val(600) - \
-                          self.txt["button"]["Options"].get_rect().centery))
+        optbutton = self.blit_centered(self.button,800,600)
+        self.blit_centered(self.txt["button"]["Options"],800,600)
         
         # Level selection button
-        levelbutton = self.screen.blit(self.button,
-                                      (scale_val(800) - self.buttonrect.centerx,
-                                       scale_val(750) - self.buttonrect.centery))
-        self.screen.blit(self.txt["button"]["Level Select"],
-                         (scale_val(800) - \
-                          self.txt["button"]["Level Select"].get_rect().centerx,
-                          scale_val(750) - \
-                          self.txt["button"]["Level Select"].get_rect().centery))
+        levelbutton = self.blit_centered(self.button,800,750)
+        self.blit_centered(self.txt["button"]["Level Select"],800,750)
         
         if pygame.mouse.get_pressed()[0]:
             if playButton.collidepoint(pygame.mouse.get_pos()):
                 self.player.groundTime = pygame.time.get_ticks()
+                self.levelclock = pygame.time.get_ticks()
                 self.selectSound.play()
                 self.update = self.levelloop
                 self.previous = self.startloop
@@ -624,12 +672,12 @@ class Game():
         # Clear the screen
         self.screen.fill((0,0,0))
 
+        if self.previous == self.startloop:
+            # Background
+            self.screen.blit(self.background,(0,0))
+
         # Title
-        self.screen.blit(self.txt["subtitle"]["Options"],
-                         (scale_val(800) - \
-                          self.txt["subtitle"]["Options"].get_rect().centerx,
-                          scale_val(60) - \
-                          self.txt["subtitle"]["Options"].get_rect().centery))
+        self.blit_centered(self.txt["subtitle"]["Options"],800,60)
 
         # Back button
         backButton = self.screen.blit(self.smallButton,(scale_val(16),scale_val(9)))
@@ -637,15 +685,40 @@ class Game():
                          (scale_val(22) + self.txt["button"]["Back"].get_rect().centerx,
                           scale_val(4) + self.txt["button"]["Back"].get_rect().centery))
         
+        # Options - Starting at x=392,y=136
+        
         # Sound slider
         slider = self.screen.blit(self.slider,(scale_val(800) - self.sliderrect.centerx,
                                                scale_val(180) - self.sliderrect.centery))
         self.screen.blit(self.txt["label"]["Sound: "],
-                         (scale_val(727) - \
-                          self.txt["label"]["Sound: "].get_rect().centerx - self.sliderrect.centerx,
+                         (scale_val(392) - \
+                          self.txt["label"]["Sound: "].get_rect().right,
                           scale_val(180) - self.txt["label"]["Sound: "].get_rect().centery))
         soundKnob = self.screen.blit(self.knob,(scale_val(800) - self.sliderrect.centerx + self.knobrect.x,
                                                 scale_val(180) - self.knobrect.centery))
+
+        # Turn on/off timer
+        if self.timerBool:
+            timerSwitch = self.screen.blit(self.switchOn,(scale_val(392),
+                                                          scale_val(285) - self.switchOnrect.centery))
+        else:
+            timerSwitch = self.screen.blit(self.switchOff,(scale_val(392),
+                                                           scale_val(285) - self.switchOnrect.centery))
+        self.screen.blit(self.txt["label"]["Timer: "],
+                         (scale_val(392) - self.txt["label"]["Timer: "].get_rect().right,
+                          scale_val(285) - self.txt["label"]["Timer: "].get_rect().centery))
+        
+        # Turn on/off particles
+        if self.particleBool:
+            particleSwitch = self.screen.blit(self.switchOn,(scale_val(792),
+                                                             scale_val(285) - self.switchOnrect.centery))
+        else:
+            particleSwitch = self.screen.blit(self.switchOff,(scale_val(792),
+                                                              scale_val(285) - self.switchOnrect.centery))
+
+        self.screen.blit(self.txt["label"]["Particles: "],
+                         (scale_val(792) - self.txt["label"]["Particles: "].get_rect().right,
+                          scale_val(285) - self.txt["label"]["Particles: "].get_rect().centery))
         
         if pygame.mouse.get_pressed()[0]:
              if backButton.collidepoint(pygame.mouse.get_pos()):
@@ -661,8 +734,20 @@ class Game():
                  self.mousepos = pygame.mouse.get_pos()
                  
                  self.slidervalue = self.knobrect.x / self.sliderrect.width
+                 
                  self.jumpSound.set_volume(self.slidervalue * 1.121)
                  self.selectSound.set_volume(self.slidervalue * 1.121)
+                 self.destroySound.set_volume(self.slidervalue * 1.121)
+                 self.powerupSound.set_volume(self.slidervalue * 1.121)
+                 
+             elif timerSwitch.collidepoint(pygame.mouse.get_pos()):
+                 self.selectSound.play()
+                 self.timerBool ^= True
+                 pygame.time.wait(100)
+             elif particleSwitch.collidepoint(pygame.mouse.get_pos()):
+                 self.selectSound.play()
+                 self.particleBool ^= True
+                 pygame.time.wait(100)
         else:
             self.mousepos = None
 
@@ -670,14 +755,19 @@ class Game():
         """ Draw the level and handle events. """
         # Clear the screen
         self.screen.fill((0,0,0))
-        
+
         # Check for held keys
         key_state = pygame.key.get_pressed()
 
+        # Left and Right movement and particles.
         if key_state[K_LEFT]:
-            self.player.left(SPEED)
+            mv = self.player.left(SPEED)
         elif key_state[K_RIGHT]:
-            self.player.right(SPEED)
+            mv = self.player.right(SPEED)
+        else:
+            self.player.particles.extend([pygame.Rect(0,0,0,0)])
+
+        self.player.particles = self.player.particles[-20:]
 
 
         if key_state[K_UP]:
@@ -698,6 +788,8 @@ class Game():
                               self.player.rect.y - self.expPlayerrect.centery + \
                               scale_val(random.randint(0,10))))
             self.world.update(self.screen)
+
+            self.player.gravity()
              
             self.failclock += 1
             self.player.groundTime = pygame.time.get_ticks()
@@ -708,6 +800,17 @@ class Game():
             self.player.gravity()
             
             self.playerPlain.draw(self.screen)
+
+        if self.particleBool:
+            self.player.draw_particles(self.screen)
+
+        # Update the timer
+        self.timertxt = self.txt["button"]["font"].render(str(round(get_interval(self.levelclock),1)),
+                                                         self.txt["button"]["anti-alias"],
+                                                         self.txt["button"]["colour"])
+        if self.timerBool:
+            self.screen.blit(self.timertxt,(0,0))
+        
 
         # Play the sound when a checkpoint is reached.
         if self.world.at_checkpoint(self.player.rect):
@@ -739,7 +842,7 @@ class Game():
             self.destroySound.play()
         elif self.failclock == 5:
             self.failclock = 0
-            pygame.time.delay(100)
+            pygame.time.delay(80)
 
             # Reset the world scrolling
             self.world.move_x(self.world.relx-self.world.checkx)
@@ -757,12 +860,11 @@ class Game():
         # Clear the screen
         self.screen.fill((0,0,0))
 
+        # Background
+        self.screen.blit(self.background,(0,0))
+
         # Title
-        self.screen.blit(self.txt["subtitle"]["Level Select"],
-                         (scale_val(800) - \
-                          self.txt["subtitle"]["Level Select"].get_rect().centerx,
-                          scale_val(60) - \
-                          self.txt["subtitle"]["Level Select"].get_rect().centery))
+        self.blit_centered(self.txt["subtitle"]["Level Select"],800,60)
 
         # Back button
         backButton = self.screen.blit(self.smallButton,(scale_val(16),scale_val(9)))
@@ -807,49 +909,34 @@ class Game():
         self.world.update(self.screen)
         self.playerPlain.draw(self.screen)
 
+        # Timer
+        if self.timerBool:
+            self.screen.blit(self.timertxt,(0,0))
+        # Particles
+        if self.particleBool:
+            self.player.draw_particles(self.screen)
+
         # Title
-        self.screen.blit(self.txt["subtitle"]["Pause"],
-                         (scale_val(800) - \
-                          self.txt["subtitle"]["Pause"].get_rect().centerx,
-                          scale_val(60) - \
-                          self.txt["subtitle"]["Pause"].get_rect().centery))
+        self.blit_centered(self.txt["subtitle"]["Pause"],800,60)
 
         # Play button
-        playButton = self.screen.blit(self.button,
-                                      (scale_val(800) - self.buttonrect.centerx,
-                                       scale_val(225) - self.buttonrect.centery))
-        self.screen.blit(self.txt["button"]["Play"],
-                         (scale_val(800) - \
-                          self.txt["button"]["Play"].get_rect().centerx,
-                          scale_val(225) - \
-                          self.txt["button"]["Play"].get_rect().centery))
+        playButton = self.blit_centered(self.button,800,225)
+        self.blit_centered(self.txt["button"]["Play"],800,225)
 
         # Options button
-        optbutton = self.screen.blit(self.button,
-                                      (scale_val(800) - self.buttonrect.centerx,
-                                       scale_val(375) - self.buttonrect.centery))
-        self.screen.blit(self.txt["button"]["Options"],
-                         (scale_val(800) - \
-                          self.txt["button"]["Options"].get_rect().centerx,
-                          scale_val(375) - \
-                          self.txt["button"]["Options"].get_rect().centery))
+        optbutton = self.blit_centered(self.button,800,375)
+        self.blit_centered(self.txt["button"]["Options"],800,375)
 
         # Exit button
-        exitbutton = self.screen.blit(self.button,
-                                      (scale_val(800) - self.buttonrect.centerx,
-                                       scale_val(525) - self.buttonrect.centery))
-
-        self.screen.blit(self.txt["button"]["Exit"],
-                         (scale_val(800) - \
-                          self.txt["button"]["Exit"].get_rect().centerx,
-                          scale_val(525) - \
-                          self.txt["button"]["Exit"].get_rect().centery))
+        exitbutton = self.blit_centered(self.button,800,525)
+        self.blit_centered(self.txt["button"]["Exit"],800,525)
 
         if pygame.mouse.get_pressed()[0]:
             if playButton.collidepoint(pygame.mouse.get_pos()):
                 self.selectSound.play()
 
                 self.player.groundTime += 1000 * get_interval(self.pausetime)
+                self.levelclock += 1000 * get_interval(self.pausetime)
                 
                 self.update = self.levelloop
                 self.previous = self.pauseloop
@@ -872,6 +959,7 @@ class Game():
             if event.type == KEYDOWN:
                 if event.key == K_p:
                     self.player.groundTime += 1000 * get_interval(self.pausetime)
+                    self.levelclock += 1000 * get_interval(self.pausetime)
                     
                     self.update = self.levelloop
                     self.previous = self.pauseloop
