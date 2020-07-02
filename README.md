@@ -2,7 +2,7 @@
 A 2D platformer game.
 
 Features:
-- 3 levels
+- 4 levels
 - 10 minutes of gameplay
 - Grass, Dirt, Metal, Metal Plate, Stone and Lava tiles.
 
