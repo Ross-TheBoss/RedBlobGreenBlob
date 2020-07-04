@@ -8,6 +8,7 @@ A simple platformer game by Ross Watts.
 import pygame
 import random
 import os
+import configparser
 
 from pygame.constants import *
 
@@ -394,7 +395,8 @@ class Player(pygame.sprite.Sprite):
         if self.rect.centerx > (WIDTH // 2) + MOVETHRESHOLD and \
            self.world.scrollWidth - WIDTH > self.world.relx:
             self.world.move_x(-movement)
-            self.particles = list(map(lambda p: p.move(-movement,0),self.particles))
+            self.particles = list(map(lambda p: p.move(-movement,0),
+                                      self.particles))
         else:
             self.rect.move_ip(movement,0)
 
@@ -415,7 +417,8 @@ class Player(pygame.sprite.Sprite):
         if self.rect.centerx < (WIDTH // 2) - MOVETHRESHOLD and \
            self.world.relx > 0:
             self.world.move_x(-movement)
-            self.particles = list(map(lambda p: p.move(-movement,0),self.particles))
+            self.particles = list(map(lambda p: p.move(-movement,0),
+                                      self.particles))
         else:
             self.rect.move_ip(movement,0)
 
@@ -476,12 +479,14 @@ class Player(pygame.sprite.Sprite):
            self.world.scrollHeight - HEIGHT > self.world.rely and \
            movement < 0:
             self.world.move_y(-movement)
-            self.particles = list(map(lambda p: p.move(0,-movement),self.particles))
+            self.particles = list(map(lambda p: p.move(0,-movement),
+                                      self.particles))
         elif self.rect.centery > (HEIGHT // 2) + MOVETHRESHOLD and \
              self.world.rely < 0 and \
              movement > 0:
             self.world.move_y(-movement)
-            self.particles = list(map(lambda p: p.move(0,-movement),self.particles))
+            self.particles = list(map(lambda p: p.move(0,-movement),
+                                      self.particles))
         else:
             self.rect.move_ip(0,movement)
 
@@ -495,8 +500,11 @@ class Player(pygame.sprite.Sprite):
                     pygame.draw.rect(screen,(shade,0,0),particle)
 
 class Game():
-    def __init__(self):
+    def __init__(self,config: configparser.ConfigParser):
         """ Control the UI of the game. """
+        # Config file
+        self.config = config
+        
         # The current function to run every update.
         self.update = self.startloop
         # The previous function that was run each update.
@@ -538,26 +546,36 @@ class Game():
         self.button, self.buttonrect = self.load_ui(UIBUTTON,alpha=True)
 
         # Small Button
-        self.smallButton, self.smallButtonrect = self.load_ui(UIBUTTONSMALL,alpha=True)
+        self.smallButton, self.smallButtonrect = self.load_ui(UIBUTTONSMALL,
+                                                              alpha=True)
 
         # Mini Button
-        self.miniButton, self.miniButtonrect = self.load_ui(UIBUTTONMINI,alpha=True)
+        self.miniButton, self.miniButtonrect = self.load_ui(UIBUTTONMINI,
+                                                            alpha=True)
         
         # Slider
-        self.slider, self.sliderrect = self.load_ui(UISLIDER,scale=0.7,alpha=True)
-        self.slidervalue = 0.9
+        self.slider, self.sliderrect = self.load_ui(UISLIDER,scale=0.7,
+                                                    alpha=True)
+        self.slidervalue = (self.config["DEFAULT"].getint("volume",100) / 100)
 
+        self.jumpSound.set_volume(self.slidervalue)
+        self.selectSound.set_volume(self.slidervalue)
+        self.destroySound.set_volume(self.slidervalue)
+        self.powerupSound.set_volume(self.slidervalue)
+        
         # Switch on
-        self.switchOn, self.switchOnrect = self.load_ui(UION,scale=0.7,alpha=True)
+        self.switchOn, self.switchOnrect = self.load_ui(UION,scale=0.7,
+                                                        alpha=True)
 
         # Switch off
-        self.switchOff, self.switchOffrect = self.load_ui(UIOFF,scale=0.7,alpha=True)
-        self.timerBool = True
-        self.particleBool = True
+        self.switchOff, self.switchOffrect = self.load_ui(UIOFF,scale=0.7,
+                                                          alpha=True)
+        self.timerBool = self.config["DEFAULT"].getboolean("timer",True)
+        self.particleBool = self.config["DEFAULT"].getboolean("particles",True)
 
         # Knob
         self.knob, self.knobrect = self.load_ui(UIKNOB,scale=0.7,alpha=True)
-        self.knobrect.move_ip(self.slidervalue * self.sliderrect.width,0)
+        self.knobrect.move_ip(self.slidervalue / 1.121 * self.sliderrect.width,0)
         
         # UI text
 
@@ -567,7 +585,7 @@ class Game():
                     "button":{"font":pygame.font.SysFont("Arial",int(scale_val(60))),
                               "colour":WHITE,"anti-alias":True,
                               "Play":None,"Options":None,"Back":None,"Exit":None,
-                              "Level Select":None},
+                              "Level Select":None,"Save":None},
                     "title":{"font":pygame.font.SysFont("Arial",int(scale_val(200)),
                                                         bold=True),
                              "colour":(51,255,0),"anti-alias":True,
@@ -684,6 +702,10 @@ class Game():
         self.screen.blit(self.txt["button"]["Back"],
                          (scale_val(22) + self.txt["button"]["Back"].get_rect().centerx,
                           scale_val(4) + self.txt["button"]["Back"].get_rect().centery))
+
+        # Save button
+        saveButton = self.blit_centered(self.button,800,796)
+        self.blit_centered(self.txt["button"]["Save"],800,796)
         
         # Options - Starting at x=392,y=136
         
@@ -719,13 +741,23 @@ class Game():
         self.screen.blit(self.txt["label"]["Particles: "],
                          (scale_val(792) - self.txt["label"]["Particles: "].get_rect().right,
                           scale_val(285) - self.txt["label"]["Particles: "].get_rect().centery))
-        
+
+        # Check if buttons have been clicked.
         if pygame.mouse.get_pressed()[0]:
              if backButton.collidepoint(pygame.mouse.get_pos()):
+                 # Back button clicked - go to main menu.
                  self.selectSound.play()
                  self.update = self.previous
                  self.previous = self.optionsloop
+             elif saveButton.collidepoint(pygame.mouse.get_pos()):
+                 # Save button clicked - save the settings the config file.
+                 self.selectSound.play()
+                 with open("options.ini","w") as conf:
+                     self.config.write(conf)
+                 pygame.time.wait(100)
+                
              elif soundKnob.collidepoint(pygame.mouse.get_pos()):
+                 # Sound knob clicked - slide the sound slider.
                  if self.mousepos:
                      dx = pygame.mouse.get_pos()[0] - self.mousepos[0]
                      if self.sliderrect.contains(self.knobrect.move(dx,0)):
@@ -733,20 +765,26 @@ class Game():
                 
                  self.mousepos = pygame.mouse.get_pos()
                  
-                 self.slidervalue = self.knobrect.x / self.sliderrect.width
+                 self.slidervalue = (self.knobrect.x / self.sliderrect.width) * 1.121
                  
-                 self.jumpSound.set_volume(self.slidervalue * 1.121)
-                 self.selectSound.set_volume(self.slidervalue * 1.121)
-                 self.destroySound.set_volume(self.slidervalue * 1.121)
-                 self.powerupSound.set_volume(self.slidervalue * 1.121)
+                 self.jumpSound.set_volume(self.slidervalue)
+                 self.selectSound.set_volume(self.slidervalue)
+                 self.destroySound.set_volume(self.slidervalue)
+                 self.powerupSound.set_volume(self.slidervalue)
+
+                 self.config["DEFAULT"]["volume"] = str(int(self.slidervalue * 100))
                  
              elif timerSwitch.collidepoint(pygame.mouse.get_pos()):
+                 # Timer switch clicked - toggle whether to show the timer.
                  self.selectSound.play()
                  self.timerBool ^= True
+                 self.config["DEFAULT"]["timer"] = str(self.timerBool).lower()
                  pygame.time.wait(100)
              elif particleSwitch.collidepoint(pygame.mouse.get_pos()):
+                 # Particles switch clicked - toggle whether to show particles.
                  self.selectSound.play()
                  self.particleBool ^= True
+                 self.config["DEFAULT"]["particles"] = str(self.timerBool).lower()
                  pygame.time.wait(100)
         else:
             self.mousepos = None
@@ -973,6 +1011,9 @@ def get_interval(ticks: int) -> float:
     return (pygame.time.get_ticks() - ticks) / 1000
 
 def main():
+    # Configuration for options
+    config = configparser.ConfigParser()
+    config.read("options.ini")
     # Sounds
     pygame.mixer.pre_init(44100,-16,8,2048)
     pygame.mixer.init()
@@ -986,7 +1027,7 @@ def main():
     # Fonts
     pygame.font.init()
 
-    game = Game()
+    game = Game(config)
     
     clock = pygame.time.Clock()
     
