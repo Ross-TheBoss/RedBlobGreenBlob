@@ -2,6 +2,7 @@
 A 2D platformer game.
 
 Features:
+- Particle effects
 - 5 levels
 - 15 minutes of gameplay
 - Grass, Dirt, Metal, Metal Plate, Stone and Lava tiles.
