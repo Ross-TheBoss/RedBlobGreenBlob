@@ -11,7 +11,6 @@ import os
 import configparser
 
 from pygame.constants import *
-
 # 16:9 aspect ratio
 # Native resolution of 100
 SIZE = 105 # Monitor = 105
@@ -185,7 +184,6 @@ class World():
 
     def has_collisions(self,bgtiles,level,i):
         """ Return whether a tile should be able to be collided with. """
-        
         above = level[i - (self.width + 1)] if i - (self.width + 1) > 0 else "\x00"
         left = level[i - 1] if i - 1 > 0 else "\x00"
         below = level[i + (self.width + 1)] if i + (self.width + 1) < len(level) else "\x00"
@@ -202,7 +200,6 @@ class World():
 
     def load_tile(self,tile):
         """ Return a all of a tile variations. """
-        
         if tile["type"] == PLATETILE:
             imgs = [self.load_image(tile["files"][0])]
         elif tile["type"] == TOPTILE:
@@ -261,7 +258,6 @@ class World():
 
     def get_movement(self, player: pygame.Rect, movement: int):
         """ Return how far the rect can be moved (in the x-axis) before colliding or reaching max. """
-        
         collision = self.collided(player.move(movement,0))
         if collision:
             if movement > 0:
@@ -345,14 +341,12 @@ class World():
 
     def animate(self,_type=ANITILE):
         """ Animate the tiles. """
-        
         for i,v in enumerate(self.items):
             if TILES[max(v["type"] - 0x10,0)]["type"] == _type:
                 self.items[i]["dir"] = random.randint(0,len(TILES[v["type"] - 0x10]["files"])-1)
         
     def update(self,screen: pygame.Surface):
         """ Draw the world onto the screen. """
-        
         screen.blits(list(filter(None,map(self.valid_rect,self.items))))
 
 class Player(pygame.sprite.Sprite):
@@ -380,13 +374,11 @@ class Player(pygame.sprite.Sprite):
         Return the velocity given the acceleration, initial velocity and time.
         Uses the equation - v = a * dt + u 
         """
-
         return scale_val((acceleration * get_interval(time) + velocity) \
                          * self.framedur / 16)
 
     def right(self, m):
         """ Move the player right by the magnetude (m). """
-
         movement = self.world.get_movement(self.rect,
                                            scale_val(m * self.framedur / 16))
 
@@ -408,7 +400,6 @@ class Player(pygame.sprite.Sprite):
                 
     def left(self, m):
         """ Move the player left by the magnetude (m). """
-
         movement = self.world.get_movement(self.rect,
                                            scale_val(-m * self.framedur / 16))
 
@@ -432,7 +423,6 @@ class Player(pygame.sprite.Sprite):
 
     def move_x(self, m):
         """ Move the player in the x axis by the magnetude (m) considering collisions. """
-
         movement = self.world.get_movement(self.rect,
                                            scale_val(m * self.framedur / 16))
 
@@ -451,7 +441,6 @@ class Player(pygame.sprite.Sprite):
         
     def gravity(self):
         """ Apply the force of gravity onto the player. """
-        
         dy = self.get_velocity(GRAVITY,self.groundTime,-self.gravVel)
         
         # Check if the player is moving upwards.
@@ -536,9 +525,10 @@ class Game():
         self.expPlayer = self.load_image(EXPLODEDPLAYER,1/1.5)
         self.expPlayerrect = self.expPlayer.get_rect()
 
-        # Background
+        # Background - streched to cover the screen.
 
-        self.background = self.load_image(BACKGROUND).convert()
+        self.background = pygame.transform.scale(pygame.image.load(BACKGROUND),
+                                                 (WIDTH,HEIGHT)).convert()
         
         # UI
 
@@ -671,6 +661,7 @@ class Game():
         
         if pygame.mouse.get_pressed()[0]:
             if playButton.collidepoint(pygame.mouse.get_pos()):
+                self.load_level("./levels/level{}.txt".format(self.level))
                 self.player.groundTime = pygame.time.get_ticks()
                 self.levelclock = pygame.time.get_ticks()
                 self.selectSound.play()
@@ -704,8 +695,13 @@ class Game():
                           scale_val(4) + self.txt["button"]["Back"].get_rect().centery))
 
         # Save button
-        saveButton = self.blit_centered(self.button,800,796)
-        self.blit_centered(self.txt["button"]["Save"],800,796)
+        # Unscale the height and take 104 away from it -
+        # the save button is positioned based on
+        # where the bottom of the screen is.
+        saveButton = self.blit_centered(self.button,800,
+                                        (HEIGHT / SIZE * 100) - 104)
+        self.blit_centered(self.txt["button"]["Save"],800,
+                           (HEIGHT / SIZE * 100) - 104)
         
         # Options - Starting at x=392,y=136
         
@@ -819,25 +815,25 @@ class Game():
                 
 
         # Draw the player and world
-        if self.world.failed(self.player.rect):
-            self.screen.blit(pygame.transform.rotate(self.expPlayer,random.randint(0,359)),
-                             (self.player.rect.x - self.expPlayerrect.centerx + \
-                              scale_val(random.randint(0,10)),
-                              self.player.rect.y - self.expPlayerrect.centery + \
-                              scale_val(random.randint(0,10))))
-            self.world.update(self.screen)
-
-            self.player.gravity()
-             
-            self.failclock += 1
-            self.player.groundTime = pygame.time.get_ticks()
-            self.player.gravVel = 0
-        elif self.failclock == 0:
-            self.world.update(self.screen)
+        self.world.update(self.screen)
         
-            self.player.gravity()
-            
-            self.playerPlain.draw(self.screen)
+        if self.failclock == 0:
+            if self.world.failed(self.player.rect):
+                self.player.gravity()
+                 
+                self.failclock = 1
+                self.player.groundTime = pygame.time.get_ticks()
+                self.player.gravVel = 0
+            else:
+                self.player.gravity()
+                
+                self.playerPlain.draw(self.screen)
+        else:
+            self.screen.blit(pygame.transform.rotate(self.expPlayer,random.randint(0,359)),
+                                 (self.player.rect.x - self.expPlayerrect.centerx + \
+                                  scale_val(random.randint(0,10)),
+                                  self.player.rect.y - self.expPlayerrect.centery + \
+                                  scale_val(random.randint(0,10))))
 
         if self.particleBool:
             self.player.draw_particles(self.screen)
@@ -878,6 +874,13 @@ class Game():
 
         if self.failclock == 1:
             self.destroySound.play()
+            self.player.groundTime = pygame.time.get_ticks()
+            self.player.gravVel = 0
+            self.failclock += 1
+        elif 5 > self.failclock > 1:
+            self.player.groundTime = pygame.time.get_ticks()
+            self.player.gravVel = 0
+            self.failclock += 1
         elif self.failclock == 5:
             self.failclock = 0
             pygame.time.delay(80)
@@ -1011,6 +1014,8 @@ def get_interval(ticks: int) -> float:
     return (pygame.time.get_ticks() - ticks) / 1000
 
 def main():
+    global WIDTH, HEIGHT
+    
     # Configuration for options
     config = configparser.ConfigParser()
     config.read("options.ini")
@@ -1020,7 +1025,8 @@ def main():
 
     # Window
     pygame.init()
-    
+
+    screenInfo = pygame.display.Info()
     pygame.display.set_caption("Platformer")
     pygame.display.set_mode((WIDTH,HEIGHT),DOUBLEBUF | RESIZABLE | HWSURFACE)
 
@@ -1033,7 +1039,7 @@ def main():
     
     run = True
     windowed = True
-    pygame.event.set_allowed([QUIT, KEYDOWN])
+    pygame.event.set_allowed([QUIT, KEYDOWN, VIDEORESIZE])
     
     while run:
         # Check for keypresses
@@ -1045,8 +1051,22 @@ def main():
                     run = False # Close the window
                 elif event.key == K_F11: # Toggle fullscreen
                     windowed ^= pygame.display.toggle_fullscreen()
+                    resizeEvent = pygame.event.Event(VIDEORESIZE,
+                                                     size=(screenInfo.current_w,
+                                                           screenInfo.current_h))
+                    pygame.event.post(resizeEvent)
                 elif event.key == K_ESCAPE and not windowed: # Exit fullscreen
                     windowed ^= pygame.display.toggle_fullscreen()
+            elif event.type == VIDEORESIZE:
+                WIDTH, HEIGHT = event.size
+                if windowed:
+                    pygame.display.set_mode(event.size,
+                                            DOUBLEBUF | RESIZABLE | HWSURFACE)
+                else:
+                    pygame.display.set_mode(event.size,
+                                            DOUBLEBUF | RESIZABLE | HWSURFACE | FULLSCREEN)
+                game.background = pygame.transform.scale(game.background,
+                                                         (WIDTH,HEIGHT)).convert()
 
         game.update()
         pygame.display.update()
