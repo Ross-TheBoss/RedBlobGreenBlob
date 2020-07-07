@@ -31,6 +31,7 @@ GRAVITY = 20 # 1200 pixels / second / second
 
 SOUNDDIR = "sounds"
 IMGDIR = "images"
+LEVELDIR = "levels"
 
 # 8-bit Platformer SFX commissioned by Mark McCorkle for OpenGameArt.org ( http://opengameart.org )
 JUMPSOUNDFILE = os.path.join(SOUNDDIR,"jump.ogg")
@@ -489,6 +490,7 @@ class Player(pygame.sprite.Sprite):
                     pygame.draw.rect(screen,(shade,0,0),particle)
 
 class Game():
+    LEVELLOCATION = "./levels/level{}.txt"
     def __init__(self,config: configparser.ConfigParser):
         """ Control the UI of the game. """
         # Config file
@@ -501,8 +503,9 @@ class Game():
         self.screen = pygame.display.get_surface()
         
         # Graphics
-        self.level = 1
-        self.load_level("./levels/level{}.txt".format(self.level))
+        self.lvl = 1
+        self.deaths = 0
+        self.load_level(self.LEVELLOCATION.format(self.lvl))
         
 
         self.mousepos = None
@@ -575,7 +578,8 @@ class Game():
                     "button":{"font":pygame.font.SysFont("Arial",int(scale_val(60))),
                               "colour":WHITE,"anti-alias":True,
                               "Play":None,"Options":None,"Back":None,"Exit":None,
-                              "Level Select":None,"Save":None},
+                              "Level Select":None,"Save":None,"Continue":None,
+                              "Restart":None,"Deaths: ":None,"Time: ":None},
                     "title":{"font":pygame.font.SysFont("Arial",int(scale_val(200)),
                                                         bold=True),
                              "colour":(51,255,0),"anti-alias":True,
@@ -583,9 +587,10 @@ class Game():
                     "subtitle":{"font":pygame.font.SysFont("Arial",int(scale_val(100)),
                                                            bold=True),
                                 "colour":WHITE,"anti-alias":True,
-                                "Options":None,"Pause":None,"Level Select":None}}
+                                "Options":None,"Pause":None,"Level Select":None,
+                                "Level Complete":None}}
         
-        for i in range(len(os.listdir("./levels/"))):
+        for i in range(len(os.listdir(LEVELDIR))):
             self.txt["button"][str(i+1)] = None
         
         for key in self.txt:
@@ -599,6 +604,10 @@ class Game():
         self.timertxt = self.txt["button"]["font"].render("0",
                                                          self.txt["button"]["anti-alias"],
                                                          self.txt["button"]["colour"])
+        # Deaths
+        self.deathtxt = self.txt["button"]["font"].render("0",
+                                                          self.txt["button"]["anti-alias"],
+                                                          self.txt["button"]["colour"])
     def blit_centered(self,surface: pygame.Surface,x,y):
         """ Blit the surface to the screen centered around x and y. """
         return self.screen.blit(surface,(scale_val(x) - surface.get_rect().centerx,
@@ -627,6 +636,7 @@ class Game():
         with open(file,"r") as f:
             level = f.read()
 
+        self.deaths = 0
         self.levelclock = pygame.time.get_ticks()
         self.world = World(level,SIZE // 2,WHITE)
         self.player = Player(pygame.Rect(self.world.start.x,
@@ -661,22 +671,22 @@ class Game():
         
         if pygame.mouse.get_pressed()[0]:
             if playButton.collidepoint(pygame.mouse.get_pos()):
-                self.load_level("./levels/level{}.txt".format(self.level))
+                self.load_level(self.LEVELLOCATION.format(self.lvl))
                 self.player.groundTime = pygame.time.get_ticks()
                 self.levelclock = pygame.time.get_ticks()
                 self.selectSound.play()
-                self.update = self.levelloop
+                self.update = self.level
                 self.previous = self.startloop
             elif optbutton.collidepoint(pygame.mouse.get_pos()):
                 self.selectSound.play()
-                self.update = self.optionsloop
+                self.update = self.options
                 self.previous = self.startloop
             elif levelbutton.collidepoint(pygame.mouse.get_pos()):
                 self.selectSound.play()
-                self.update = self.levelselectloop
+                self.update = self.levelselect
                 self.previous = self.startloop
     
-    def optionsloop(self):
+    def options(self):
         """ Draw the options screen and handle events. """
         # Clear the screen
         self.screen.fill((0,0,0))
@@ -744,7 +754,7 @@ class Game():
                  # Back button clicked - go to main menu.
                  self.selectSound.play()
                  self.update = self.previous
-                 self.previous = self.optionsloop
+                 self.previous = self.options
              elif saveButton.collidepoint(pygame.mouse.get_pos()):
                  # Save button clicked - save the settings the config file.
                  self.selectSound.play()
@@ -785,7 +795,7 @@ class Game():
         else:
             self.mousepos = None
 
-    def levelloop(self):
+    def level(self):
         """ Draw the level and handle events. """
         # Clear the screen
         self.screen.fill((0,0,0))
@@ -857,25 +867,25 @@ class Game():
         # Advance to the next level.
         if self.world.end.contains(self.player.rect):
             self.powerupSound.play()
-            self.level += 1
-            if self.level > len(os.listdir("./levels/")):
-                self.level = 1
-                self.load_level("./levels/level{}.txt".format(self.level))
-                self.update = self.startloop
-            else:
-                self.load_level("./levels/level{}.txt".format(self.level))
+
+            self.deathtxt = self.txt["button"]["font"].render(str(self.deaths),
+                                                              self.txt["button"]["anti-alias"],
+                                                              self.txt["button"]["colour"])
+            self.update = self.levelcomplete
+            self.previous = self.level
 
         for event in pygame.event.get():
             if event.type == KEYDOWN:
                 if event.key == K_p:
                     self.pausetime = pygame.time.get_ticks()
-                    self.update = self.pauseloop
-                    self.previous = self.levelloop
+                    self.update = self.pause
+                    self.previous = self.level
 
         if self.failclock == 1:
             self.destroySound.play()
             self.player.groundTime = pygame.time.get_ticks()
             self.player.gravVel = 0
+            self.deaths += 1
             self.failclock += 1
         elif 5 > self.failclock > 1:
             self.player.groundTime = pygame.time.get_ticks()
@@ -896,7 +906,7 @@ class Game():
                                  self.world)
             self.playerPlain = pygame.sprite.RenderPlain(self.player)
 
-    def levelselectloop(self):
+    def levelselect(self):
         """ Draw the level selection screen and handle events. """
         # Clear the screen
         self.screen.fill((0,0,0))
@@ -915,7 +925,7 @@ class Game():
         
         gen = zip(*iter((x,y) for y in range(0,750,150) for x in range(0,900,150)))
         
-        for x,y,lvl in zip(*gen,range(1,len(os.listdir("./levels/"))+1)):
+        for x,y,lvl in zip(*gen,range(1,len(os.listdir(LEVELDIR))+1)):
             lvlButton = self.screen.blit(self.miniButton,(scale_val(350 + x),scale_val(158 + y)))
             self.screen.blit(self.txt["button"][str(lvl)],
                      (scale_val(378 + x) + self.txt["button"][str(lvl)].get_rect().centerx,
@@ -925,11 +935,11 @@ class Game():
                lvlButton.collidepoint(pygame.mouse.get_pos()):
                 self.selectSound.play()
                 
-                self.level = lvl
-                self.load_level("./levels/level{}.txt".format(self.level))
+                self.lvl = lvl
+                self.load_level(self.LEVELLOCATION.format(self.lvl))
                 
-                self.update = self.levelloop
-                self.previous = self.optionsloop
+                self.update = self.level
+                self.previous = self.levelselect
 
 
         if pygame.mouse.get_pressed()[0]:
@@ -937,11 +947,114 @@ class Game():
                  self.selectSound.play()
                  
                  self.update = self.previous
-                 self.previous = self.optionsloop
+                 self.previous = self.levelselect
+
+    def levelcomplete(self):
+        """ Draw the level completion screen and handle events. """
+        # Clear the screen
+        self.screen.fill((0,0,0))
+
+        # Draw the world and player
+        self.world.update(self.screen)
+        self.playerPlain.draw(self.screen)
+
+        # Particles
+        if self.particleBool:
+            self.player.draw_particles(self.screen)
+
+        # Title
+        self.blit_centered(self.txt["subtitle"]["Level Complete"],800,60)
+
+        # Time and Deaths displays
+        self.screen.blit(self.txt["button"]["Deaths: "],
+                         (scale_val(840) - (self.buttonrect.w / 2),
+                          scale_val(200) - self.txt["button"]["Deaths: "].get_rect().centery))
+        self.screen.blit(self.deathtxt,
+                         (scale_val(1070) - (self.buttonrect.w / 2),
+                          scale_val(200) - self.deathtxt.get_rect().centery))
+        
+        self.screen.blit(self.txt["button"]["Time: "],
+                         (scale_val(1240) - (self.buttonrect.w / 2),
+                          scale_val(200) - self.txt["button"]["Time: "].get_rect().centery))
+        self.screen.blit(self.timertxt,
+                         (scale_val(1420) - (self.buttonrect.w / 2),
+                          scale_val(200) - self.timertxt.get_rect().centery))
+        
+        
+
+        # Continue button
+        continueButton = self.blit_centered(self.button,800,350)
+        self.blit_centered(self.txt["button"]["Continue"],800,350)
+
+        # Restart button
+        restartButton = self.blit_centered(self.button,800,500)
+        self.blit_centered(self.txt["button"]["Restart"],800,500)
+
+        # Options button
+        optbutton = self.blit_centered(self.button,800,650)
+        self.blit_centered(self.txt["button"]["Options"],800,650)
+
+        # Exit button
+        exitbutton = self.blit_centered(self.button,800,800)
+        self.blit_centered(self.txt["button"]["Exit"],800,800)
+
+        if pygame.mouse.get_pressed()[0]:
+            if continueButton.collidepoint(pygame.mouse.get_pos()):
+                # Go to next level
+                self.selectSound.play()
+                
+                self.lvl += 1
+                if self.lvl > len(os.listdir(LEVELDIR)):
+                    self.lvl = 1
+                    self.load_level(self.LEVELLOCATION.format(self.lvl))
+                    self.update = self.startloop
+                    self.previous = self.levelcomplete
+                else:
+                    self.load_level(self.LEVELLOCATION.format(self.lvl))
+                    self.update = self.level
+                    self.previous = self.levelcomplete
+            elif restartButton.collidepoint(pygame.mouse.get_pos()):
+                self.selectSound.play()
+
+                self.load_level(self.LEVELLOCATION.format(self.lvl))
+
+                self.update = self.level
+                self.previous = self.levelcomplete
+            elif optbutton.collidepoint(pygame.mouse.get_pos()):
+                self.selectSound.play()
+                
+                self.update = self.options
+                self.previous = self.levelcomplete
+            elif exitbutton.collidepoint(pygame.mouse.get_pos()):
+                self.selectSound.play()
+                
+                self.lvl = 1
+                self.load_level(self.LEVELLOCATION.format(self.lvl))
+                
+                self.update = self.startloop
+                self.previous = self.levelcomplete
+
+        # Check for keys
+        for event in pygame.event.get():
+            if event.type == KEYDOWN:
+                if event.key == K_RETURN:
+                    # Go to next level
+                    
+                    self.lvl += 1
+                    if self.lvl > len(os.listdir(LEVELDIR)):
+                        self.lvl = 1
+                        self.load_level(self.LEVELLOCATION.format(self.lvl))
+                        self.update = self.startloop
+                        self.previous = self.levelcomplete
+                    else:
+                        self.load_level(self.LEVELLOCATION.format(self.lvl))
+                        self.update = self.level
+                        self.previous = self.levelcomplete
+        
                  
         
 
-    def pauseloop(self):
+    def pause(self):
         """ Draw the pausescreen and handle events. """
         # Clear the screen
         self.screen.fill((0,0,0))
@@ -964,13 +1077,17 @@ class Game():
         playButton = self.blit_centered(self.button,800,225)
         self.blit_centered(self.txt["button"]["Play"],800,225)
 
+        # Restart button
+        restartButton = self.blit_centered(self.button,800,375)
+        self.blit_centered(self.txt["button"]["Restart"],800,375)
+
         # Options button
-        optbutton = self.blit_centered(self.button,800,375)
-        self.blit_centered(self.txt["button"]["Options"],800,375)
+        optbutton = self.blit_centered(self.button,800,525)
+        self.blit_centered(self.txt["button"]["Options"],800,525)
 
         # Exit button
-        exitbutton = self.blit_centered(self.button,800,525)
-        self.blit_centered(self.txt["button"]["Exit"],800,525)
+        exitbutton = self.blit_centered(self.button,800,675)
+        self.blit_centered(self.txt["button"]["Exit"],800,675)
 
         if pygame.mouse.get_pressed()[0]:
             if playButton.collidepoint(pygame.mouse.get_pos()):
@@ -979,31 +1096,38 @@ class Game():
                 self.player.groundTime += 1000 * get_interval(self.pausetime)
                 self.levelclock += 1000 * get_interval(self.pausetime)
                 
-                self.update = self.levelloop
-                self.previous = self.pauseloop
+                self.update = self.level
+                self.previous = self.pause
+            elif restartButton.collidepoint(pygame.mouse.get_pos()):
+                self.selectSound.play()
+
+                self.load_level(self.LEVELLOCATION.format(self.lvl))
+
+                self.update = self.level
+                self.previous = self.pause
             elif optbutton.collidepoint(pygame.mouse.get_pos()):
                 self.selectSound.play()
                 
-                self.update = self.optionsloop
-                self.previous = self.pauseloop
+                self.update = self.options
+                self.previous = self.pause
             elif exitbutton.collidepoint(pygame.mouse.get_pos()):
                 self.selectSound.play()
                 
-                self.level = 1
-                self.load_level("./levels/level{}.txt".format(self.level))
+                self.lvl = 1
+                self.load_level(self.LEVELLOCATION.format(self.lvl))
                 
                 self.update = self.startloop
-                self.previous = self.pauseloop
+                self.previous = self.pause
 
         # Check for keys
         for event in pygame.event.get():
             if event.type == KEYDOWN:
-                if event.key == K_p:
+                if event.key == K_p or event.key == K_RETURN:
                     self.player.groundTime += 1000 * get_interval(self.pausetime)
                     self.levelclock += 1000 * get_interval(self.pausetime)
                     
-                    self.update = self.levelloop
-                    self.previous = self.pauseloop
+                    self.update = self.level
+                    self.previous = self.pause
     
 
 def scale_val(value) -> int:
@@ -1067,7 +1191,6 @@ def main():
                                             DOUBLEBUF | RESIZABLE | HWSURFACE | FULLSCREEN)
                 game.background = pygame.transform.scale(game.background,
                                                          (WIDTH,HEIGHT)).convert()
-
         game.update()
         pygame.display.update()
         game.player.framedur = clock.tick(60)
