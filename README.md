@@ -12,6 +12,7 @@ To install the game:
 1. Download the ZIP file using the Code - Download ZIP button.
 2. Execute the command: 
 `python3 -m pip install RedBlobGreenBlob-master.zip`
+inside the same directory as the zip file.
 
 # Credits / Attribution
 
