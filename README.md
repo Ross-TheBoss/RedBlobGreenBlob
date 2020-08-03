@@ -1,4 +1,8 @@
 # RetroParkourer
+
+![Pygame 1.9.3](https://img.shields.io/badge/Pygame-1.9.4-green.svg)
+![Python 3.6](https://img.shields.io/badge/Python-3.6%2B-green.svg)
+
 A 2D platformer game.
 
 Features:
