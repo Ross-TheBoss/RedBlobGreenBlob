@@ -1,0 +1,9 @@
+Files:
+- RedBlobGreenBlob - entry point for running in non-standard locations.
+- ui.py (redblobgreenblob main game) - mostly UI
+- player.py
+- world.py
+
+Screen Size:
+- Must be able to support a square screen size.
+- Options to scale the window.
