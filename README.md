@@ -5,11 +5,33 @@
 
 A 2D platformer game.
 
-Features:
+#### Features
 - Particle effects
 - 5 levels
 - 15 minutes of gameplay
 - Grass, Dirt, Metal, Metal Plate, Stone and Lava tiles.
+
+#### Keys
+###### Menu Navigation:
+- backspace
+- enter
+
+###### Movement:
+- up
+- down
+- left
+- right
+
+###### Pause: 
+- `p`
+###### Complete Level (for testing): 
+- F1
+###### Close Window: 
+- control-q
+###### Toggle Fullscreen: 
+- F11
+###### Exit Fullscreen: 
+- escape
 
 # Installation
 To install the game:
@@ -17,6 +39,10 @@ To install the game:
 2. Execute the command: 
 `python3 -m pip install RedBlobGreenBlob-master.zip`
 inside the same directory as the zip file.
+
+To run the game:
+1. Execute the command:
+`python3 -m RedBlobGreenBlob`
 
 # Credits / Attribution
 
