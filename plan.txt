@@ -7,3 +7,13 @@ Files:
 Screen Size:
 - Must be able to support a square screen size.
 - Options to scale the window.
+
+Gameplay:
+- Unlock levels - Red tinted locked buttons.
+- Ace levels - no lives lost.
+- Personal best times. DONE
+- Save files - record times for each level. DONE
+- Rebind keys config file.
+
+Remove cheat keys:
+F1 to finish level.
