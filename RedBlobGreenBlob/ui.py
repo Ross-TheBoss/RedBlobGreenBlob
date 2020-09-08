@@ -26,7 +26,10 @@ BACKGROUND = os.path.join(IMGDIR,"background.png")
 # Colours
 
 WHITE = (255,255,255)
-GREEN = (255,0,0)
+GREEN = (51,255,0)
+RED = (255,51,0)
+# Golden ratio gold - GoldenWolf79 (https://www.color-hex.com/color/ffda00)
+GOLD = (255,218,0) 
 
 TOP, LEFT = 0,0
 CENTER = 1
@@ -64,6 +67,7 @@ class UI(Camera):
         self.static = pygame.sprite.Group()
 
         self.lvl = 1
+        self.lvlTimes = []
 
         # A function that handles all the global keyboard events.
         self.eventHandler = None
@@ -71,8 +75,9 @@ class UI(Camera):
         # Text
         self.fonts = {"label":[pygame.font.SysFont("Arial",int(40 * (self.size / 100))),True,WHITE],
                       "button":[pygame.font.SysFont("Arial",int(60 * (self.size / 100))),True,WHITE],
-                      "title green":[pygame.font.SysFont("Arial",int(150 * (self.size / 100)),bold=True),True,(51,255,0)],
-                      "title red":[pygame.font.SysFont("Arial",int(150 * (self.size / 100)),bold=True),True,(255,51,0)],
+                      "gold button":[pygame.font.SysFont("Arial",int(60 * (self.size / 100))),True,GOLD],
+                      "title green":[pygame.font.SysFont("Arial",int(150 * (self.size / 100)),bold=True),True,GREEN],
+                      "title red":[pygame.font.SysFont("Arial",int(150 * (self.size / 100)),bold=True),True,RED],
                       "subtitle":[pygame.font.SysFont("Arial",int(100 * (self.size / 100)),bold=True),True,WHITE]}
 
         self.images  = {"button":self.load_image(UIBUTTON),
@@ -139,7 +144,7 @@ class UI(Camera):
         if event.type == KEYDOWN:
             if event.key == K_p:
                 self.load_pause()
-            elif event.key == K_F1:
+            elif event.key == K_F1: # TODO: For testing
                 self.load_levelcomplete()
 
     def pauseHandler(self,event):
@@ -168,6 +173,16 @@ class UI(Camera):
             elif event.key == K_BACKSPACE:
                 # Restart level
                 self.load_world(self.lvl)
+
+    def optionsHandler(self, event):
+        """ Event handler for the options screen - handle the event. """
+        if event.type == KEYDOWN:
+            if event.key == K_BACKSPACE:
+                # Go back - same as pressing the back button.
+                self.previous()
+            elif event.key == K_RETURN:
+                # Save options
+                self.save_options()
     
     # Loaders
     def load_image(self,filename,scale=1) -> pygame.Surface:
@@ -298,9 +313,30 @@ class UI(Camera):
             if self.options["DEFAULT"].getboolean("timer"):
                 self.static.add(self.timer)
         else:
-            self.completionTime = self.timer.calc_time()
+            self.completionTicks = self.timer.calc_time()
             self.player.paused = True
             self.timer.paused = True
+
+            # Record the time in milliseconds.
+            # Rewrite the entiere times file.
+            with open(os.path.join(ROOTDIR,"times.csv"),"r+") as file:
+                content = file.readlines()
+                if len(content) < self.lvl:
+                    content.extend(["\n"] * (self.lvl - len(content)))
+
+                content[self.lvl-1] = "{}{}, \n".format(content[self.lvl-1][:-1],
+                                                        self.completionTicks)
+
+                # Update the level times.
+                self.lvlTimes = []
+                for line in content:
+                    self.lvlTimes.append(list(map(int,line[:-1].split(", ")[:-1])))
+                
+                file.seek(0,0)
+                file.writelines(content)
+
+        # Calculate the best time for the level.
+        bestTime = min(self.lvlTimes[self.lvl-1])
         
         self.eventHandler = self.completeHandler
 
@@ -314,8 +350,10 @@ class UI(Camera):
                             self.render_text("button","Time: "),
                             self.overlay,anchor=(LEFT,CENTER))
 
+        # Turn gold if the time is the best time on the level.
         timer = Widget(self.get_static(0.646,0.22),
-                       self.render_text("button",self.completionTime),
+                       self.render_text("gold button" if bestTime == self.completionTicks else "button",
+                                        str(round(self.completionTicks / 1000,1))),
                        self.overlay,anchor=(LEFT,CENTER))
 
         deathsLabel = Widget(self.get_static(0.271,0.22),
@@ -349,14 +387,11 @@ class UI(Camera):
         self.static.add(*iter(self.overlay))
 
         self.previous = self.load_levelcomplete
-        
-
-        
 
     def load_options(self):
         """ Load the options screen. """
         # Screen
-        self.eventHandler = lambda event: None
+        self.eventHandler = self.optionsHandler
 
         self.empty()
 
@@ -641,12 +676,12 @@ class Timer(Widget):
         self._paused = value
 
     def calc_time(self):
-        return str(round((pygame.time.get_ticks() - self.timerTicks) / 1000,1))
+        return (pygame.time.get_ticks() - self.timerTicks)
 
     def update(self):
         if not self.paused:
             self.image = self.method(*self.args,
-                                     self.calc_time())
+                                     str(round(self.calc_time()/1000,1)))
         super().update()
         
             
