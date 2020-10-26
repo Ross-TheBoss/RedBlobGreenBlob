@@ -36,9 +36,9 @@ A 2D platformer game.
 # Installation
 To install the game:
 1. Download the ZIP file using the Code - Download ZIP button.
-2. Execute the command: 
-`python3 -m pip install RedBlobGreenBlob-master.zip`
-inside the same directory as the zip file.
+2. Do one of these steps:
+- Execute the command: `python3 -m pip install RedBlobGreenBlob-master.zip` inside the same directory as the zip file.
+- Extract the zip file and run the setup.py file inside it - `python3 setup.py install`.
 
 To run the game:
 1. Execute the command:
