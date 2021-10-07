@@ -16,7 +16,8 @@ setuptools.setup(
     package_data={"RedBlobGreenBlob":["images/*.png",
                                       "levels/*.txt",
                                       "sounds/*.ogg",
-                                      "*.ini"]},
+                                      "*.ini",
+                                     "*.csv"]},
     classifiers=[
         "Programming Language :: Python :: 3",
         "Development Status :: 3 - Alpha",
