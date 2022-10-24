@@ -167,7 +167,7 @@ class Level(pygame.sprite.AbstractGroup):
                                              self.size, self.height * self.size)))
 
     def load_image(self, file):
-        """ Load a tile image scaled to the appriate size. """
+        """ Load a tile image scaled to the appropriate size. """
         return pygame.transform.scale(pygame.image.load(file),
                                       (self.size, self.size))
 

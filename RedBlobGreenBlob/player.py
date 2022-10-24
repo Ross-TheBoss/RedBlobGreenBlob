@@ -19,7 +19,7 @@ class Player(pygame.sprite.Sprite):
     jumpSpeed = 9 * 60
     gravity = 20 * 60
 
-    kayoteTicks = 50
+    kayote_ticks = 50
     death_duration = 100
 
     def __init__(self, level, camera, mixer, scale: int = 100):
@@ -172,7 +172,7 @@ class Player(pygame.sprite.Sprite):
         """ Update the particles. """
 
         # Add particle
-        if (pygame.time.get_ticks() - self.ground_ticks) < self.kayoteTicks and velx != 0:
+        if (pygame.time.get_ticks() - self.ground_ticks) < self.kayote_ticks and velx != 0:
             for i in range(2):
                 particle = pygame.sprite.Sprite()
                 size = random.randint(int((self.scale // 10) * 0.7), (self.scale // 10))
@@ -272,10 +272,10 @@ class Player(pygame.sprite.Sprite):
 
     def jump(self, value):
         """ Jump with an initial velocity of value. """
-        if (pygame.time.get_ticks() - self.ground_ticks) < self.kayoteTicks:
+        if (pygame.time.get_ticks() - self.ground_ticks) < self.kayote_ticks:
             if not self.jumpChl.get_busy():
                 self.jumpChl.play(self.mixer["jump"])
             self.velocity.y = -value
             self.yTicks = pygame.time.get_ticks()
-            self.ground_ticks -= self.kayoteTicks - (
+            self.ground_ticks -= self.kayote_ticks - (
                     pygame.time.get_ticks() - self.ground_ticks)
