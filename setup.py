@@ -6,7 +6,7 @@ with open("README.md","r") as fh:
 setuptools.setup(
     name="RedBlobGreenBlob",
     version="0.0.1",
-    install_requires=["pygame>=1.9.4"],
+    install_requires=["pygame>=2.0.0"],
     author="Ross Watts",
     description="A platformer game - the sequel to RetroParkourer.",
     long_description=long_description,
@@ -24,5 +24,5 @@ setuptools.setup(
         "Topic :: Games/Entertainment :: Side-Scrolling/Arcade Games",
         "Topic :: Software Development :: Libraries :: pygame",
     ],
-    python_requires=">=3.6",
+    python_requires=">=3.7",
 )
