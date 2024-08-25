@@ -151,15 +151,15 @@ class UI(Camera):
     def level_handler(self, event):
         """ Event handler for the level screen - handle the event. """
         if event.type == KEYDOWN:
-            if event.key == K_p:
+            if event.key in (K_p, K_ESCAPE):
                 self.load_pause()
-            elif event.key == K_F1:  # TODO: For testing
+            elif event.key == K_F1 and DEBUG:  # TODO: For testing
                 self.load_levelcomplete()
 
     def pause_handler(self, event):
         """ Event handler for the pause screen - handle the event. """
         if event.type == KEYDOWN:
-            if event.key in [K_p, K_RETURN]:
+            if event.key in (K_p, K_RETURN, K_ESCAPE):
                 self.unpause()
             elif event.key == K_BACKSPACE:
                 # Restart level

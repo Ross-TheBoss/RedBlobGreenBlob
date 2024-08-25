@@ -1,6 +1,6 @@
 # RedBlobGreenBlob
 
-![Pygame 1.9.3](https://img.shields.io/badge/Pygame-1.9.4-green.svg)
+![Pygame 1.9.4](https://img.shields.io/badge/Pygame-1.9.4-green.svg)
 ![Python 3.6](https://img.shields.io/badge/Python-3.6%2B-green.svg)
 
 A 2D platformer game.
@@ -17,21 +17,14 @@ A 2D platformer game.
 - enter
 
 ###### Movement:
-- up
-- down
-- left
-- right
+- up w space
+- left a
+- right d
 
 ###### Pause: 
-- `p`
+- `p` escape
 ###### Complete Level (for testing): 
 - F1
-###### Close Window: 
-- control-q
-###### Toggle Fullscreen: 
-- F11
-###### Exit Fullscreen: 
-- escape
 
 # Installation
 To install the game:

@@ -208,12 +208,12 @@ class Player(pygame.sprite.Sprite):
             # Events
             key_state = pygame.key.get_pressed()
 
-            if key_state[K_RIGHT]:
+            if key_state[K_RIGHT] or key_state[K_d]:
                 self.thrust = self.speed
-            elif key_state[K_LEFT]:
+            elif key_state[K_LEFT] or key_state[K_a]:
                 self.thrust = -self.speed
 
-            if key_state[K_UP]:
+            if key_state[K_UP] or key_state[K_w] or key_state[K_SPACE]:
                 self.jump(self.jumpSpeed)
 
             if self.level.end.rect.contains(self.rect):

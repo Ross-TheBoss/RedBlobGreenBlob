@@ -4,6 +4,8 @@ Provides global constant values for RedBlobGreenBlob.
 
 # Directories
 
+DEBUG = False
+
 IMGDIR = "images"
 LEVELDIR = "levels"
 
