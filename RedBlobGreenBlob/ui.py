@@ -4,24 +4,22 @@ RedBlobGreenBlob
 A platformer game by Ross Watts - the sequel to RetroParkourer.
 """
 
-import pygame
-import os
 import configparser
+import os
 
-from pygame.constants import *
-from RedBlobGreenBlob.level import *
-from RedBlobGreenBlob.player import *
-from RedBlobGreenBlob.constants import *
+from level import *
+from player import *
+from constants import *
 
-UIBUTTON = os.path.join(IMGDIR, "button.png")
-UIBUTTONSMALL = os.path.join(IMGDIR, "smallbutton.png")
-UIBUTTONMINI = os.path.join(IMGDIR, "minibutton.png")
-UISLIDER = os.path.join(IMGDIR, "slider.png")
-UIKNOB = os.path.join(IMGDIR, "knob.png")
-UION = os.path.join(IMGDIR, "on.png")
-UIOFF = os.path.join(IMGDIR, "off.png")
+UIBUTTON = "images/button.png"
+UIBUTTONSMALL = "images/smallbutton.png"
+UIBUTTONMINI = "images/minibutton.png"
+UISLIDER = "images/slider.png"
+UIKNOB = "images/knob.png"
+UION = "images/on.png"
+UIOFF = "images/off.png"
 
-BACKGROUND = os.path.join(IMGDIR, "background.png")
+BACKGROUND = "images/background.png"
 
 # Colours
 
@@ -42,14 +40,15 @@ class UI(Camera):
 
     Create the user interface for red blob green blob.
     """
-    LEVELLOCATION = os.path.join(LEVELDIR, "level{}.txt")
+    LEVELLOCATION = "levels/level{}.txt"
 
     def __init__(self, display_info: pygame.display.Info,
                  options: configparser.ConfigParser):
+        super().__init__(0, 0, display_info.current_w, display_info.current_h,
+                         display_info.current_w, display_info.current_h,
+                         display_info.current_h // 10)
+
         self.display_info = display_info
-        super().__init__(0, 0, self.display_info.current_w, self.display_info.current_h,
-                         self.display_info.current_w, self.display_info.current_h,
-                         self.size)
         self.player = None
         self.level = None
         self.overlay = None
@@ -139,7 +138,7 @@ class UI(Camera):
 
     def save_options(self):
         """ Save the options to the file. """
-        with open(os.path.join(ROOTDIR, "options.ini"), "w") as file:
+        with open("options.ini", "w") as file:
             self.options.write(file)
 
     @property
@@ -329,7 +328,7 @@ class UI(Camera):
 
             # Record the time in milliseconds.
             # Rewrite the entire times file.
-            with open(os.path.join(ROOTDIR, "times.csv"), "r+") as file:
+            with open("times.csv", "r+") as file:
                 content = file.readlines()
                 if len(content) < self.lvl:
                     content.extend(["\n"] * (self.lvl - len(content)))
@@ -531,6 +530,8 @@ class Widget(pygame.sprite.Sprite):
     def __init__(self, pos: tuple, image: pygame.surface.Surface,
                  *groups, anchor: tuple = (0, 0)):
         """Initialise the Widget using its (x,y) position (pos), image, groups and anchor."""
+        super().__init__()
+
         self.image = image
 
         # Finding smallest rect that encapsulates all opaque pixels.
@@ -544,7 +545,7 @@ class Widget(pygame.sprite.Sprite):
         # The actual position of the widget on screen.
         self.realrect = self.rect.copy()
 
-        super().__init__(*groups)
+        self.add(*groups)
 
     def move(self, pos: tuple):
         """ Move the widget to a new position. """
@@ -589,14 +590,14 @@ class Button(Widget):
     def __init__(self, pos: tuple, method,
                  image: pygame.surface.Surface, text: pygame.surface.Surface,
                  mixer, *groups, args: tuple = (), anchor: tuple = (0, 0)):
+        super().__init__(pos, image, *groups, anchor=anchor)
+
         image.blit(text, (image.get_rect().centerx - text.get_rect().centerx,
                           image.get_rect().centery - text.get_rect().centery))
 
         self.method = method
         self.args = args
         self.mixer = mixer
-
-        super().__init__(pos, image, *groups, anchor=anchor)
 
     def update(self):
         if pygame.mouse.get_pressed()[0]:
@@ -611,14 +612,14 @@ class Switch(Widget):
     def __init__(self, pos: tuple, images: list,
                  method, mixer, *groups, args: tuple = (), anchor: tuple = (0, 0),
                  value: bool = False):
+        super().__init__(pos, images[int(value)], *groups, anchor=anchor)
+
         self.method = method
         self.args = args
         self.mixer = mixer
 
         self.images = images
         self.value = value
-
-        super().__init__(pos, self.images[int(self.value)], *groups, anchor=anchor)
 
     def update(self):
         if pygame.mouse.get_pressed()[0]:
@@ -634,12 +635,13 @@ class Switch(Widget):
 class Slider(Widget):
     def __init__(self, pos, slider, knob, method, *groups, args=(), anchor=(0, 0),
                  value=0):
+        super().__init__(pos, slider, *groups, anchor=anchor)
+
         self.max = slider.get_rect().right - knob.get_rect().width
 
         self.slider = slider
         self.knob = knob
 
-        super().__init__(pos, slider, *groups, anchor=anchor)
         self.method = method
         self.args = args
 
@@ -672,13 +674,14 @@ class Slider(Widget):
 class Timer(Widget):
     def __init__(self, pos: tuple, method,
                  *groups, args: tuple = (), anchor: tuple = (0, 0)):
+        super().__init__(pos, method(*args, "0"),
+                         *groups, anchor=anchor)
+
         self.timer_ticks = pygame.time.get_ticks()
 
         self.method = method
         self.args = args
         self._paused = False
-        super().__init__(pos, self.method(*self.args, "0"),
-                         *groups, anchor=anchor)
 
     @property
     def paused(self) -> bool:
@@ -701,71 +704,3 @@ class Timer(Widget):
             self.image = self.method(*self.args,
                                      str(round(self.calc_time() / 1000, 1)))
         super().update()
-
-
-def main():
-    global ui  # For testing
-    # Sounds
-    pygame.mixer.pre_init(44100, -16, 8, 2048)
-    pygame.mixer.init()
-
-    # Window
-    pygame.init()
-
-    # pygame.display.set_mode((800,450))
-    screenInfo = pygame.display.Info()
-    # Size - 10th of the current height.
-    size = screenInfo.current_h // 10
-    height = screenInfo.current_h
-    width = screenInfo.current_w
-
-    pygame.display.set_caption("RedBlobGreenBlob")
-    pygame.display.set_mode((width, height), RESIZABLE)
-
-    screen = pygame.display.get_surface()
-
-    options = configparser.ConfigParser()
-    options.read(os.path.join(ROOTDIR, "options.ini"))
-
-    ui = UI(screenInfo, options)
-
-    clock = pygame.time.Clock()
-
-    # Mainloop
-    run = True
-    windowed = True
-    while run:
-        screen.fill((0, 0, 0))
-
-        # Check for keypresses
-        for event in pygame.event.get():
-            if event.type == QUIT:
-                run = False  # Close the window
-            elif event.type == KEYDOWN:
-                if event.key == K_q and event.mod & KMOD_CTRL:
-                    run = False  # Close the window
-                elif event.key == K_F11:  # Toggle fullscreen
-                    windowed ^= pygame.display.toggle_fullscreen()
-                    resize_event = pygame.event.Event(VIDEORESIZE,
-                                                      size=(screenInfo.current_w,
-                                                            screenInfo.current_h))
-                    pygame.event.post(resize_event)
-                elif event.key == K_ESCAPE and not windowed:  # Exit fullscreen
-                    windowed ^= pygame.display.toggle_fullscreen()
-                else:
-                    ui.event_handler(event)
-            else:
-                ui.event_handler(event)
-
-        if ui.player:
-            ui.player.frameTicks = min(100, clock.tick(60))
-
-        ui.update()
-        ui.draw(screen)
-        pygame.display.update()
-
-    pygame.quit()
-
-
-if __name__ == "__main__":
-    main()

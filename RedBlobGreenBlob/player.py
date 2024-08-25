@@ -3,15 +3,13 @@
 RedBlobGreenBlob player.
 """
 
-import pygame
 import random
-import os
 
+import pygame
 from pygame.constants import *
-from RedBlobGreenBlob.constants import *
 
-UIPLAYER = os.path.join(IMGDIR, "player.png")
-UIEXPLODED = os.path.join(IMGDIR, "exploded.png")
+UIPLAYER = "images/player.png"
+UIEXPLODED = "images/exploded.png"
 
 
 class Player(pygame.sprite.Sprite):

@@ -4,11 +4,9 @@ RedBlobGreenBlob level loader.
 """
 
 import pygame
-import os
 import random
 
-from RedBlobGreenBlob.constants import *
-from RedBlobGreenBlob.player import Player
+from player import Player
 
 PLATETILE = 0
 TOPTILE = 1
@@ -45,7 +43,7 @@ TILES = [
 for tile in TILES:
     if "files" in tile:
         tile.update(
-            {"files": list(map(lambda file: os.path.join(IMGDIR, file), tile["files"]))})
+            {"files": list(map(lambda file: f"images/{file}", tile["files"]))})
 
 
 class Tile(pygame.sprite.Sprite):
@@ -278,7 +276,7 @@ class Camera(pygame.sprite.Group):
         """
         Initialise the camera with its (x,y) position, width, height, scroll width, scroll height and move threshold. 
         """
-        super().__init__(self)
+        super().__init__()
         self.x = x
         self.y = y
         self.scrollWidth = sWidth
