@@ -2,14 +2,16 @@ import json
 
 from pprint import pprint
 
+
 def with_key(key, iterable,
-             key_func = lambda x: x,
-             value_func = lambda x: x):
+             key_func=lambda x: x,
+             value_func=lambda x: x):
     for item in iterable:
         yield key_func(item[key]), value_func(dict([*item.items()][1:]))
-    
 
-FILENAME = "level1.json"
+NAME = "level6"
+
+FILENAME = f"{NAME}.tmj"
 
 with open(FILENAME, "r") as file:
     level_map = json.load(file)
@@ -26,7 +28,7 @@ tiles = tileset["tiles"]
 
 tile_mapping = dict(with_key("id", tiles, lambda x: x + 1))
 
-output_file = open("parsed_map.txt", "w")
+output_file = open(f"../RedBlobGreenBlob/levels/{NAME}.txt", "w")
 
 for row in range(height):
     for column in range(width):
